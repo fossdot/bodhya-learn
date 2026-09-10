@@ -13,6 +13,7 @@
   "title_hi",
   "sort_order",
   "published",
+  "level",
   "sec_video",
   "video",
   "video_title",
@@ -73,6 +74,15 @@
    "fieldname": "published",
    "fieldtype": "Check",
    "label": "Published"
+  },
+  {
+   "fieldname": "level",
+   "fieldtype": "Int",
+   "label": "Level (1–5)",
+   "default": "1",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Which rung of the L1–L5 ladder this lesson belongs to. A learner sees lessons up to her current level; passing the level test opens the next."
   },
   {
    "fieldname": "sec_video",
@@ -192,7 +202,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-31 00:00:00.000000",
+ "modified": "2026-09-07 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hikmat",
  "name": "Lesson",

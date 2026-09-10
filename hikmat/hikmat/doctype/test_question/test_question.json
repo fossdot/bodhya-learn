@@ -1,0 +1,170 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-09-07 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-07 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hikmat",
+ "name": "Test Question",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "question",
+ "search_fields": "question,track_key,lesson_key",
+ "track_changes": 1,
+ "fields": [
+  {
+   "fieldname": "lesson",
+   "fieldtype": "Link",
+   "options": "Lesson",
+   "label": "Lesson",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "The lesson this question checks. A learner is only ever served questions from lessons she has actually played."
+  },
+  {
+   "fieldname": "track_key",
+   "fieldtype": "Data",
+   "label": "Track",
+   "fetch_from": "lesson.track",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "lesson_key",
+   "fieldtype": "Data",
+   "label": "Lesson key",
+   "fetch_from": "lesson.lesson_key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "level",
+   "fieldtype": "Int",
+   "label": "Level (1–5)",
+   "fetch_from": "lesson.level",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Copied from the lesson. Set the level on the Lesson, not here."
+  },
+  {
+   "fieldname": "difficulty",
+   "fieldtype": "Select",
+   "options": "Easy\nMedium\nHard",
+   "default": "Medium",
+   "label": "Difficulty",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Sets the per-question countdown (seconds per difficulty live on the Test Level)."
+  },
+  {
+   "fieldname": "active",
+   "fieldtype": "Check",
+   "default": "1",
+   "label": "Active",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "options": "Seed\nDesk\nMigrated",
+   "default": "Desk",
+   "label": "Source",
+   "read_only": 1,
+   "description": "Seed rows are re-created from data/testbank.json on reseed; Desk and Migrated rows are never touched by a reseed."
+  },
+  {
+   "fieldname": "sec_q",
+   "fieldtype": "Section Break",
+   "label": "Question"
+  },
+  {
+   "fieldname": "question",
+   "fieldtype": "Data",
+   "label": "Question (English)",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "question_hi",
+   "fieldtype": "Data",
+   "label": "Question (Hindi)"
+  },
+  {
+   "fieldname": "emoji",
+   "fieldtype": "Data",
+   "label": "Picture / emoji (optional, shown above the question)"
+  },
+  {
+   "fieldname": "choices",
+   "fieldtype": "Small Text",
+   "label": "Choices (one per line)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "answer",
+   "fieldtype": "Data",
+   "label": "Answer (correct choice)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_teach",
+   "fieldtype": "Section Break",
+   "label": "Facilitator notes"
+  },
+  {
+   "fieldname": "teach",
+   "fieldtype": "Small Text",
+   "label": "Why (explains the answer)",
+   "description": "Facilitator reference only — never shown or sent to students during a test."
+  },
+  {
+   "fieldname": "teach_hi",
+   "fieldtype": "Small Text",
+   "label": "Why (Hindi)"
+  }
+ ],
+ "field_order": [
+  "lesson",
+  "track_key",
+  "lesson_key",
+  "level",
+  "difficulty",
+  "active",
+  "source",
+  "sec_q",
+  "question",
+  "question_hi",
+  "emoji",
+  "choices",
+  "answer",
+  "sec_teach",
+  "teach",
+  "teach_hi"
+ ]
+}

@@ -100,8 +100,9 @@
    "fieldname": "band",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Grade band",
-   "options": "Grade Band"
+   "label": "Class / education stage",
+   "options": "Grade Band",
+   "description": "1-4, 5-8, 9-10 are the content bands; 11-12, ug (Bachelor's) and pg (Master's) are self-description only — those learners play the 9–10 content."
   },
   {
    "default": "Online",
@@ -167,7 +168,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-21 21:57:04.590962",
+ "modified": "2026-09-07 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hikmat",
  "name": "Student",

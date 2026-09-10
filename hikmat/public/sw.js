@@ -1,10 +1,11 @@
 /* Hikmat PWA service worker — offline-first app shell + content.
    Scope: /assets/hikmat/. Bump CACHE to ship an update to installed PWAs. */
-const CACHE = "hikmat-pwa-v8";   // v8: the 283-lesson curriculum + the activity rotation
+const CACHE = "hikmat-pwa-v9";   // v9: lesson levels (L1–L5) + the level-test bank
 const BASE = "/assets/hikmat/";
 const SHELL = [
   BASE + "game.html",
   BASE + "curriculum.json",          // full 283-lesson offline baseline (survives localStorage eviction)
+  BASE + "testbank.json",            // the L1–L5 level-test question bank, same contract
   BASE + "manifest.webmanifest",
   BASE + "icons/icon-192.png",
   BASE + "icons/icon-512.png",
@@ -12,7 +13,7 @@ const SHELL = [
   BASE + "icons/icon-180.png",
 ];
 // read APIs cached (network-first) so the game keeps full content offline even if localStorage is wiped
-const CACHED_API = ["hikmat.api.get_courses", "hikmat.api.get_structure", "hikmat.api.get_settings"];
+const CACHED_API = ["hikmat.api.get_courses", "hikmat.api.get_structure", "hikmat.api.get_settings", "hikmat.api.get_test_bank"];
 
 self.addEventListener("install", (e) => {
   // tolerate a missing asset; do NOT unconditionally skipWaiting — the page asks us to activate
