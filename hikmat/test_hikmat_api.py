@@ -238,9 +238,10 @@ class TestHikmatApi(FrappeTestCase):
 		                                     "duration_secs"), 7200)
 
 
-class TestModuleTests(FrappeTestCase):
-	"""Module-end tests: bank validation, curriculum export, submit_test hardening,
-	get_progress tests/testSeen. Mirrors TestHikmatApi's explicit-cleanup style."""
+class TestLevelTests(FrappeTestCase):
+	"""Level tests (L1–L5): bank validation, lesson levels in the curriculum export, the
+	get_test_bank payload, submit_test hardening + server-side grading, get_progress
+	levels/testSeen. Mirrors TestHikmatApi's explicit-cleanup style."""
 
 	def _mk_student(self, name):
 		def _rm():
@@ -252,93 +253,133 @@ class TestModuleTests(FrappeTestCase):
 		return frappe.get_doc({"doctype": "Student", "student_name": name,
 		                       "active": 1, "gender": "Other"}).insert(ignore_permissions=True)
 
-	def _mk_track(self, key="mt-track"):
+	def _mk_track(self, key="lt-track", n_lessons=0, levels=None):
 		def _rm():
-			frappe.db.delete("Module Test", {"track": key})
+			for l in frappe.get_all("Lesson", filters={"track": key}, pluck="name"):
+				frappe.db.delete("Test Question", {"lesson": l})
+			frappe.db.delete("Lesson", {"track": key})
 			frappe.db.delete("Track", {"name": key})
 			frappe.db.commit()
 			api.clear_content_cache()
 		self.addCleanup(_rm)
 		if frappe.db.exists("Track", key):
+			for l in frappe.get_all("Lesson", filters={"track": key}, pluck="name"):
+				frappe.delete_doc("Lesson", l, force=1, ignore_permissions=True)
 			frappe.delete_doc("Track", key, force=1, ignore_permissions=True)
-		return frappe.get_doc({"doctype": "Track", "track_key": key, "title": "MT Track",
-		                       "published": 1}).insert(ignore_permissions=True)
-
-	def _q(self, i):
-		return {"question": f"Q{i}?", "choices": "a\nb\nc", "answer": "a"}
-
-	def _mk_module_test(self, track, n_questions=10, per_paper=5, pass_pct=60):
-		mt = frappe.get_doc({"doctype": "Module Test", "track": track.name, "active": 1,
-		                     "questions_per_paper": per_paper, "pass_pct": pass_pct,
-		                     "time_limit_secs": 600,
-		                     "questions": [self._q(i) for i in range(n_questions)]})
-		mt.insert(ignore_permissions=True)
-		return mt
-
-	def test_module_test_rejects_answer_not_in_choices(self):
-		track = self._mk_track("mt-badq")
-		mt = frappe.get_doc({"doctype": "Module Test", "track": track.name,
-		                     "questions_per_paper": 1, "pass_pct": 60, "time_limit_secs": 600,
-		                     "questions": [{"question": "Q?", "choices": "a\nb", "answer": "zzz"}]})
-		self.assertRaises(frappe.ValidationError, mt.insert)
-
-	def test_module_test_rejects_bank_smaller_than_paper(self):
-		track = self._mk_track("mt-small")
-		mt = frappe.get_doc({"doctype": "Module Test", "track": track.name,
-		                     "questions_per_paper": 5, "pass_pct": 60, "time_limit_secs": 600,
-		                     "questions": [self._q(i) for i in range(3)]})
-		self.assertRaises(frappe.ValidationError, mt.insert)
-
-	def test_module_test_rejects_bad_config(self):
-		track = self._mk_track("mt-cfg")
-		base = {"doctype": "Module Test", "track": track.name,
-		        "questions": [self._q(i) for i in range(3)]}
-		for bad in ({"questions_per_paper": 0, "pass_pct": 60, "time_limit_secs": 600},
-		            {"questions_per_paper": 1, "pass_pct": 0, "time_limit_secs": 600},
-		            {"questions_per_paper": 1, "pass_pct": 101, "time_limit_secs": 600},
-		            {"questions_per_paper": 1, "pass_pct": 60, "time_limit_secs": 30}):
-			mt = frappe.get_doc({**base, **bad})
-			self.assertRaises(frappe.ValidationError, mt.insert)
-
-	def test_track_json_exports_bank_without_answkey_leaks(self):
-		track = self._mk_track("mt-export")
-		self._mk_module_test(track, n_questions=6, per_paper=5)
+		t = frappe.get_doc({"doctype": "Track", "track_key": key, "title": "LT Track",
+		                    "published": 1}).insert(ignore_permissions=True)
+		lessons = []
+		for i in range(n_lessons):
+			d = {"doctype": "Lesson", "track": t.name, "lesson_key": "l%02d" % (i + 1),
+			     "title": "Lesson %d" % (i + 1), "title_hi": "पाठ %d" % (i + 1), "sort_order": i, "published": 1}
+			if levels:
+				d["level"] = levels[i]
+			lessons.append(frappe.get_doc(d).insert(ignore_permissions=True))
 		api.clear_content_cache()
-		t = next(c for c in api._build_courses() if c["key"] == "mt-export")
-		self.assertIn("test", t)
-		self.assertEqual(t["test"]["questionsPerPaper"], 5)
-		self.assertEqual(t["test"]["passPct"], 60)
-		self.assertEqual(len(t["test"]["bank"]), 6)
-		for q in t["test"]["bank"]:
-			for key in ("id", "q", "choices", "answer"):
+		return t, lessons
+
+	def _q(self, lesson, i, difficulty="Medium", **kw):
+		d = {"doctype": "Test Question", "lesson": lesson.name, "difficulty": difficulty,
+		     "question": f"Q{i}?", "choices": "a\nb\nc", "answer": "a", "source": "Desk"}
+		d.update(kw)
+		return frappe.get_doc(d).insert(ignore_permissions=True)
+
+	# ---- lesson levels ----
+	def test_default_level_is_position_in_track(self):
+		self.assertEqual([api.default_level(i, 10) for i in range(10)], [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
+		self.assertEqual([api.default_level(i, 5) for i in range(5)], [1, 2, 3, 4, 5])
+		self.assertEqual([api.default_level(i, 4) for i in range(4)], [1, 2, 3, 4])
+		self.assertEqual(api.default_level(0, 1), 1)
+		self.assertEqual(api.default_level(99, 10), 5)     # never above 5
+
+	def test_track_json_exports_lesson_level_with_default(self):
+		_, lessons = self._mk_track("lt-levels", n_lessons=5, levels=[1, 1, 4, 0, 0])
+		t = next(c for c in api._build_courses() if c["key"] == "lt-levels")
+		got = [l["level"] for l in t["lessons"]]
+		# explicit levels win; a 0/empty level falls back to the position default (4th of 5 → 4, 5th → 5)
+		self.assertEqual(got, [1, 1, 4, 4, 5])
+		self.assertNotIn("test", t)                          # the per-track Module Test block is gone
+
+	# ---- bank validation ----
+	def test_test_question_rejects_bad_rows_and_denormalises_lesson(self):
+		_, lessons = self._mk_track("lt-valid", n_lessons=2, levels=[3, 3])
+		bad = frappe.get_doc({"doctype": "Test Question", "lesson": lessons[0].name,
+		                      "question": "Q?", "choices": "a\nb", "answer": "zzz"})
+		self.assertRaises(frappe.ValidationError, bad.insert)
+		one = frappe.get_doc({"doctype": "Test Question", "lesson": lessons[0].name,
+		                      "question": "Q?", "choices": "a", "answer": "a"})
+		self.assertRaises(frappe.ValidationError, one.insert)
+		dup = frappe.get_doc({"doctype": "Test Question", "lesson": lessons[0].name,
+		                      "question": "Q?", "choices": "a\na", "answer": "a"})
+		self.assertRaises(frappe.ValidationError, dup.insert)
+		ok = self._q(lessons[1], 1, difficulty="Bogus")
+		self.assertEqual((ok.track_key, ok.lesson_key, ok.level), ("lt-valid", "l02", 3))
+		self.assertEqual(ok.difficulty, "Medium")           # unknown difficulty normalised, not rejected
+
+	def test_test_level_rejects_bad_config(self):
+		def _rm():
+			frappe.db.delete("Test Level", {"level": 9})
+			frappe.db.commit()
+		self.addCleanup(_rm)
+		base = {"doctype": "Test Level", "title": "L9", "stars_required": 10, "questions_per_paper": 5,
+		        "pass_pct": 75, "easy_secs": 20, "medium_secs": 30, "hard_secs": 45}
+		for bad in ({"level": 9}, {"level": 0}, {"level": 1, "questions_per_paper": 0},
+		            {"level": 1, "pass_pct": 101}, {"level": 1, "stars_required": 0},
+		            {"level": 1, "easy_secs": 2}):
+			self.assertRaises(frappe.ValidationError, frappe.get_doc({**base, **bad}).insert)
+
+	# ---- payload ----
+	def test_get_test_bank_ships_levels_and_active_questions_without_hints(self):
+		_, lessons = self._mk_track("lt-bank", n_lessons=2, levels=[2, 5])
+		self._q(lessons[0], 1, difficulty="Easy", teach="never ships")
+		self._q(lessons[1], 2, difficulty="Hard")
+		off = self._q(lessons[1], 3)
+		frappe.db.set_value("Test Question", off.name, "active", 0)
+		api.clear_content_cache()
+		bank = api.get_test_bank()
+		self.assertEqual([l["level"] for l in bank["levels"]], [1, 2, 3, 4, 5])
+		for l in bank["levels"]:
+			for k in ("starsRequired", "questionsPerPaper", "passPct", "secs", "title", "titleHi"):
+				self.assertIn(k, l)
+		mine = [q for q in bank["bank"] if q["t"] == "lt-bank"]
+		self.assertEqual(len(mine), 2)                        # the inactive row is not shipped
+		by_l = {q["l"]: q for q in mine}
+		self.assertEqual((by_l["l01"]["level"], by_l["l01"]["d"]), (2, "e"))
+		self.assertEqual((by_l["l02"]["level"], by_l["l02"]["d"]), (5, "h"))
+		for q in mine:
+			for key in ("id", "q", "choices", "answer", "t", "l"):
 				self.assertIn(key, q)
-			self.assertNotIn("teach", q)      # facilitator notes never ship in a test
+			self.assertNotIn("teach", q)                      # facilitator notes never ship in a test
 
-	def test_track_json_skips_inactive_test(self):
-		track = self._mk_track("mt-inactive")
-		mt = self._mk_module_test(track, n_questions=6, per_paper=5)
-		frappe.db.set_value("Module Test", mt.name, "active", 0)
+	def test_get_test_bank_is_busted_on_question_edit(self):
+		_, lessons = self._mk_track("lt-bust", n_lessons=1)
 		api.clear_content_cache()
-		t = next(c for c in api._build_courses() if c["key"] == "mt-inactive")
-		self.assertNotIn("test", t)
+		before = len([q for q in api.get_test_bank()["bank"] if q["t"] == "lt-bust"])
+		self._q(lessons[0], 1)                                # doc_events → clear_content_cache
+		after = len([q for q in api.get_test_bank()["bank"] if q["t"] == "lt-bust"])
+		self.assertEqual((before, after), (0, 1))
 
-	def test_submit_test_rejects_unknown_student_and_bad_token(self):
-		self.assertEqual(api.submit_test(student="nope-xyz", track="t",
+	# ---- submit_test ----
+	def test_submit_test_rejects_unknown_student_bad_token_bad_level(self):
+		self.assertEqual(api.submit_test(student="nope-xyz", level=1,
 		                                 status="completed").get("error"), "unknown_student")
 		stu = self._mk_student("Test Auth Girl")
-		r = api.submit_test(student=stu.name, token="forged", track="t", status="completed")
+		r = api.submit_test(student=stu.name, token="forged", level=1, status="completed")
 		self.assertEqual(r.get("error"), "auth")
+		tok = api._token_for(stu.name)
+		self.assertEqual(api.submit_test(student=stu.name, token=tok, level=7,
+		                                 status="completed").get("error"), "bad_level")
 
 	def test_submit_test_rejects_bad_status(self):
 		stu = self._mk_student("Test Status Girl")
 		tok = api._token_for(stu.name)
-		r = api.submit_test(student=stu.name, token=tok, track="t", status="hacked")
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="hacked")
 		self.assertEqual(r.get("error"), "bad_status")
 
 	def test_submit_test_idempotent_on_client_id(self):
 		stu = self._mk_student("Test Dedup Girl")
 		tok = api._token_for(stu.name)
-		kw = dict(student=stu.name, token=tok, track="t1", status="completed",
+		kw = dict(student=stu.name, token=tok, level=1, status="completed",
 		          score=4, total=5, client_id="t-test-1")
 		r1 = api.submit_test(**kw)
 		self.assertTrue(r1.get("ok"))
@@ -349,69 +390,98 @@ class TestModuleTests(FrappeTestCase):
 	def test_submit_test_exited_forces_zero(self):
 		stu = self._mk_student("Test Void Girl")
 		tok = api._token_for(stu.name)
-		r = api.submit_test(student=stu.name, token=tok, track="t1", status="exited",
+		r = api.submit_test(student=stu.name, token=tok, level=2, status="exited",
 		                    exit_reason="hidden", score=9, total=10, client_id="t-test-void")
 		self.assertTrue(r.get("ok"))
 		self.assertFalse(r.get("passed"))
 		row = frappe.db.get_value("Test Attempt", {"client_id": "t-test-void"},
-		                          ["score", "pct", "passed", "status", "exit_reason"], as_dict=True)
-		self.assertEqual(row.score, 0)
-		self.assertEqual(row.pct, 0)
-		self.assertEqual(row.passed, 0)
-		self.assertEqual(row.status, "Exited")
-		self.assertEqual(row.exit_reason, "hidden")
+		                          ["score", "pct", "passed", "status", "exit_reason", "level"], as_dict=True)
+		self.assertEqual((row.score, row.pct, row.passed, row.status, row.exit_reason, row.level),
+		                 (0, 0, 0, "Exited", "hidden", 2))
 
-	def test_submit_test_pass_computed_server_side(self):
-		track = self._mk_track("mt-pass")
-		self._mk_module_test(track, n_questions=10, per_paper=10, pass_pct=60)
+	def test_submit_test_pass_is_75_by_default_and_timed_out_counts(self):
 		stu = self._mk_student("Test Pass Girl")
 		tok = api._token_for(stu.name)
-		r = api.submit_test(student=stu.name, token=tok, track="mt-pass", status="completed",
-		                    score=6, total=10, client_id="t-test-p1")
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                    score=15, total=20, client_id="t-test-p1")
 		self.assertTrue(r.get("passed"))
-		r = api.submit_test(student=stu.name, token=tok, track="mt-pass", status="completed",
-		                    score=5, total=10, client_id="t-test-p2")
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                    score=14, total=20, client_id="t-test-p2")
 		self.assertFalse(r.get("passed"))
 		# running out of time is not cheating — answered-so-far still counts
-		r = api.submit_test(student=stu.name, token=tok, track="mt-pass", status="timed_out",
-		                    score=7, total=10, client_id="t-test-p3")
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="timed_out",
+		                    score=16, total=20, client_id="t-test-p3")
 		self.assertTrue(r.get("passed"))
+
+	def test_submit_test_regrades_from_answers_when_ids_are_ours(self):
+		_, lessons = self._mk_track("lt-grade", n_lessons=1)
+		qs = [self._q(lessons[0], i) for i in range(4)]        # answer is "a" on every row
+		stu = self._mk_student("Test Grade Girl")
+		tok = api._token_for(stu.name)
+		paper = json.dumps([q.name for q in qs])
+		# client claims 4/4 but only two answers are actually right → server says 2/4, not passed
+		answers = json.dumps({qs[0].name: "a", qs[1].name: "b", qs[2].name: "a", qs[3].name: "c"})
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                    score=4, total=4, paper=paper, answers=answers, client_id="t-grade-1")
+		self.assertEqual((r["score"], r["total"], r["passed"]), (2, 4, False))
+		self.assertEqual(r["graded"], "server:2/4")
+		row = frappe.db.get_value("Test Attempt", {"client_id": "t-grade-1"}, ["score", "pct", "answers"], as_dict=True)
+		self.assertEqual((row.score, row.pct), (2, 50))
+		self.assertIn(qs[1].name, row.answers)
+		# a paper padded with ids the server never issued: those are trusted only up to the client's claim
+		mixed = json.dumps([qs[0].name, qs[1].name, "quiz:x/y/1", "quiz:x/y/2"])
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                    score=4, total=4, paper=mixed, answers=json.dumps({qs[0].name: "a", qs[1].name: "a"}),
+		                    client_id="t-grade-2")
+		self.assertEqual((r["score"], r["total"]), (4, 4))    # 2 verified + 2 unverifiable trusted
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                    score=4, total=4, paper=mixed, answers=json.dumps({qs[0].name: "b", qs[1].name: "b"}),
+		                    client_id="t-grade-3")
+		self.assertEqual((r["score"], r["total"]), (2, 4))    # 0 verified + at most the 2 unverifiable
 
 	def test_submit_test_clamps_and_survives_bad_paper(self):
 		stu = self._mk_student("Test Clamp Girl")
 		tok = api._token_for(stu.name)
-		r = api.submit_test(student=stu.name, token=tok, track="t1", status="completed",
-		                    score=99, total=5, paper="not-json[", duration_secs=999999,
+		r = api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                    score=99, total=5, paper="not-json[", answers="{broken", duration_secs=999999,
 		                    client_id="t-test-clamp")
 		self.assertTrue(r.get("ok"))
 		row = frappe.db.get_value("Test Attempt", {"client_id": "t-test-clamp"},
-		                          ["score", "paper", "duration_secs", "attempted_on"], as_dict=True)
+		                          ["score", "paper", "answers", "duration_secs", "attempted_on"], as_dict=True)
 		self.assertEqual(row.score, 5)              # clamped to total
 		self.assertEqual(row.paper, "[]")           # malformed paper never rejects the write
+		self.assertEqual(row.answers or "", "")
 		self.assertEqual(row.duration_secs, 7200)
 		self.assertTrue(row.attempted_on)           # first-exposure ordering depends on this
 
-	def test_get_progress_returns_tests_and_seen_union(self):
+	def test_get_progress_returns_levels_and_seen_union(self):
 		stu = self._mk_student("Test Seen Girl")
 		tok = api._token_for(stu.name)
-		api.submit_test(student=stu.name, token=tok, track="t1", status="completed",
-		                score=3, total=5, paper='["qa","qb"]', client_id="t-seen-1")
-		api.submit_test(student=stu.name, token=tok, track="t1", status="exited",
-		                exit_reason="blur", score=0, total=5, paper='["qb","qc"]',
+		api.submit_test(student=stu.name, token=tok, level=1, status="completed",
+		                score=15, total=20, paper='["qa","qb"]', client_id="t-seen-1")
+		api.submit_test(student=stu.name, token=tok, level=1, status="exited",
+		                exit_reason="blur", score=0, total=20, paper='["qb","qc"]',
 		                client_id="t-seen-2")
+		api.submit_test(student=stu.name, token=tok, level=2, status="completed",
+		                score=1, total=20, paper='["qz"]', client_id="t-seen-3")
+		# a legacy per-track row (retired Module Test) still parses under `tests`
+		api.submit_test(student=stu.name, token=tok, level=0, track="old-track", status="completed",
+		                score=3, total=5, paper='["m1"]', client_id="t-seen-4")
 		res = api.get_progress(student=stu.name, token=tok)
-		self.assertIn("t1", res.get("tests", {}))
-		self.assertEqual(res["tests"]["t1"]["attempts"], 2)
-		self.assertEqual(res["tests"]["t1"]["bestPct"], 60)
-		# voided papers still burn: the union is qa, qb, qc in first-exposure order
-		self.assertEqual(res.get("testSeen", {}).get("t1"), ["qa", "qb", "qc"])
+		self.assertEqual(res["levels"]["1"], {"passed": True, "bestPct": 75, "attempts": 2})
+		self.assertEqual(res["levels"]["2"]["passed"], False)
+		self.assertEqual(res["tests"]["old-track"]["attempts"], 1)
+		# voided papers still burn: the union is qa, qb, qc in first-exposure order, keyed by level
+		self.assertEqual(res["testSeen"]["L1"], ["qa", "qb", "qc"])
+		self.assertEqual(res["testSeen"]["L2"], ["qz"])
+		self.assertEqual(res["testSeen"]["old-track"], ["m1"])
 
 	def test_log_event_accepts_test_exit(self):
 		def _rm():
 			frappe.db.delete("Learning Event", {"client_id": "t-texit-1"})
 			frappe.db.commit()
 		self.addCleanup(_rm)
-		r = api.log_event(kind="test_exit", track="t1", activity="test", tool="hidden",
+		r = api.log_event(kind="test_exit", track="L1", activity="test", tool="hidden",
 		                  duration_secs=120, count=3, client_id="t-texit-1")
 		self.assertTrue(r.get("ok"))
 		self.assertEqual(api.log_event(kind="dance_party").get("error"), "bad_kind")
@@ -419,10 +489,21 @@ class TestModuleTests(FrappeTestCase):
 	def test_delete_student_erases_test_attempts(self):
 		stu = self._mk_student("Test Erase Girl")
 		tok = api._token_for(stu.name)
-		api.submit_test(student=stu.name, token=tok, track="t1", status="completed",
+		api.submit_test(student=stu.name, token=tok, level=1, status="completed",
 		                score=1, total=5, client_id="t-erase-1")
 		api.delete_student(stu.name)
 		self.assertEqual(frappe.db.count("Test Attempt", {"student": stu.name}), 0)
+
+	def test_seed_test_levels_is_idempotent_and_keeps_desk_edits(self):
+		from hikmat import setup_data
+		setup_data.seed_test_levels()
+		self.assertEqual(frappe.db.count("Test Level"), 5)
+		frappe.db.set_value("Test Level", {"level": 3}, "pass_pct", 80)
+		setup_data.seed_test_levels()
+		self.assertEqual(frappe.db.get_value("Test Level", {"level": 3}, "pass_pct"), 80)
+		self.assertEqual(api._level_rules(3)["passPct"], 80)
+		frappe.db.set_value("Test Level", {"level": 3}, "pass_pct", 75)
+		frappe.db.commit()
 
 
 class TestAttendance(FrappeTestCase):

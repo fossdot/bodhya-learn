@@ -450,6 +450,28 @@ GRADE_BANDS = [
      "subtitleHi": "माध्यमिक — बोर्ड स्तर के कौशल और कंप्यूटर",
      "icon": "🎓", "color": "#6c5ce7"},
 ]
+# Education stages a learner can declare at sign-up BEYOND the three content bands. They are
+# Grade Band rows too (Student.band Links there) but stay unpublished, so they never become a
+# door in the game: a Class-12 or college student plays the 9–10 content. Kept here, not in
+# GRADE_BANDS, so nothing that iterates the content bands ever sees them.
+EDUCATION_STAGES = [
+    {"key": "11-12", "title": "Class 11–12", "titleHi": "कक्षा 11–12",
+     "subtitle": "Senior secondary", "subtitleHi": "उच्च माध्यमिक", "icon": "📘", "color": "#0ea5e9"},
+    {"key": "ug", "title": "Bachelor's degree", "titleHi": "स्नातक (Bachelor's)",
+     "subtitle": "Graduation — BA / BSc / BCom …", "subtitleHi": "स्नातक — BA / BSc / BCom …", "icon": "🎓", "color": "#8b5cf6"},
+    {"key": "pg", "title": "Master's degree", "titleHi": "परास्नातक (Master's)",
+     "subtitle": "Post-graduation — MA / MSc / MCom …", "subtitleHi": "परास्नातक — MA / MSc / MCom …", "icon": "🏅", "color": "#d97706"},
+]
+# The five rungs of the level ladder and their default rules. Created once; Desk edits win
+# afterwards (seed_test_levels never overwrites an existing row).
+TEST_LEVELS = [
+    {"level": n, "title": "Level %d" % n, "title_hi": "स्तर %d" % n, "active": 1,
+     "stars_required": 100, "questions_per_paper": 20, "pass_pct": 75,
+     "easy_secs": 20, "medium_secs": 30, "hard_secs": 45,
+     "intro": "Questions come from the lessons you have played at this level.",
+     "intro_hi": "सवाल उन्हीं पाठों से आएँगे जो तुमने इस स्तर पर खेले हैं।"}
+    for n in range(1, 6)
+]
 SUBJECTS = [
     {"key": "english",  "title": "English",        "titleHi": "अंग्रेज़ी",   "icon": "🔤", "color": "#2ec27e"},
     {"key": "math",     "title": "Mathematics",    "titleHi": "गणित",        "icon": "➗", "color": "#3b82f6"},
@@ -470,6 +492,13 @@ def seed_structure():
                     "subtitle": b["subtitle"], "subtitle_hi": b["subtitleHi"],
                     "icon": b["icon"], "color": b["color"], "sort_order": i, "published": 1})
         doc.save(ignore_permissions=1)
+    for i, b in enumerate(EDUCATION_STAGES):
+        doc = frappe.get_doc("Grade Band", b["key"]) if frappe.db.exists("Grade Band", b["key"]) \
+            else frappe.new_doc("Grade Band")
+        doc.update({"band_key": b["key"], "title": b["title"], "title_hi": b["titleHi"],
+                    "subtitle": b["subtitle"], "subtitle_hi": b["subtitleHi"],
+                    "icon": b["icon"], "color": b["color"], "sort_order": 100 + i, "published": 0})
+        doc.save(ignore_permissions=1)
     for i, s in enumerate(SUBJECTS):
         doc = frappe.get_doc("Subject", s["key"]) if frappe.db.exists("Subject", s["key"]) \
             else frappe.new_doc("Subject")
@@ -477,7 +506,74 @@ def seed_structure():
                     "icon": s["icon"], "color": s["color"], "sort_order": i})
         doc.save(ignore_permissions=1)
     frappe.db.commit()
-    print("=== seeded", len(GRADE_BANDS), "bands +", len(SUBJECTS), "subjects ===")
+    print("=== seeded", len(GRADE_BANDS), "bands +", len(EDUCATION_STAGES), "education stages +",
+          len(SUBJECTS), "subjects ===")
+
+
+def seed_test_levels():
+    """Create the L1–L5 Test Level rows if missing. Idempotent and NON-destructive: a row a
+    facilitator has already tuned in Desk (a different pass mark, a longer timer) is left alone."""
+    if not frappe.db.exists("DocType", "Test Level"):
+        return
+    made = 0
+    for row in TEST_LEVELS:
+        if frappe.db.exists("Test Level", {"level": row["level"]}):
+            continue
+        frappe.get_doc({"doctype": "Test Level", **row}).insert(ignore_permissions=1)
+        made += 1
+    frappe.db.commit()
+    print("=== test levels: %d created, %d already present ===" % (made, len(TEST_LEVELS) - made))
+
+
+def _load_test_bank():
+    import os
+    path = frappe.get_app_path("hikmat", "data", "testbank.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def seed_test_bank():
+    """(Re)create the SEED rows of the level-test bank from data/testbank.json. Rows a
+    facilitator authored in Desk (source Desk) or that v19 carried over from the old Module
+    Tests (source Migrated) are never touched. A row whose lesson does not exist is skipped and
+    counted, never fatal — the bank must not be able to break a content reseed."""
+    if not frappe.db.exists("DocType", "Test Question"):
+        return
+    rows = _load_test_bank()
+    if not rows:
+        # Nothing to re-create, so DELETE NOTHING. data/testbank.json missing or empty (an older
+        # checkout, a partial deploy) must leave the seeded bank exactly as it is: wiping it here
+        # would silently empty every level's question pool, and a pool under MIN_PAPER stops the
+        # tests running at all. A no-op is always the safe reading of "no data file".
+        have = frappe.db.count("Test Question", {"source": "Seed"})
+        print("=== test bank: data/testbank.json missing or empty — kept the %d existing seed "
+              "question(s) untouched ===" % have)
+        return
+    for n in frappe.get_all("Test Question", filters={"source": "Seed"}, pluck="name"):
+        frappe.delete_doc("Test Question", n, force=1, ignore_permissions=1)
+    made = skipped = bad = 0
+    for r in rows:
+        lesson = "%s-%s" % (r.get("track", ""), r.get("lesson", ""))
+        if not frappe.db.exists("Lesson", lesson):
+            skipped += 1
+            continue
+        try:
+            frappe.get_doc({
+                "doctype": "Test Question", "lesson": lesson, "source": "Seed", "active": 1,
+                "difficulty": (r.get("difficulty") or "Medium").title(),
+                "question": r["q"], "question_hi": r.get("qHi", ""), "emoji": r.get("emoji", ""),
+                "choices": "\n".join(r["choices"]), "answer": r["answer"],
+                "teach": r.get("teach", ""), "teach_hi": r.get("teachHi", ""),
+            }).insert(ignore_permissions=1)
+            made += 1
+        except Exception:
+            bad += 1
+    frappe.db.commit()
+    from hikmat.api import clear_content_cache
+    clear_content_cache()
+    print("=== test bank: %d seed questions created, %d skipped (no such lesson), %d rejected ===" % (made, skipped, bad))
 
 
 def seed_operational_defaults():
@@ -516,7 +612,8 @@ def seed_operational_defaults():
         ss.flags.ignore_mandatory = True
         ss.save(ignore_permissions=True)
     frappe.db.commit()
-    print("=== operational defaults ready (campus, cohorts, invite code, login settings) ===")
+    seed_test_levels()   # the L1–L5 ladder rules (a patch does this on migrated sites)
+    print("=== operational defaults ready (campus, cohorts, invite code, login settings, test levels) ===")
 
 
 def wipe_demo_data():
@@ -663,6 +760,12 @@ def export_offline_curriculum():
     with open(path, "w", encoding="utf-8") as f:
         json.dump(_build_courses(), f, ensure_ascii=False, separators=(",", ":"))
     print("=== wrote", path, "===")
+    # the level-test bank rides beside it — same offline contract (SW-precached static file)
+    from hikmat.api import _build_test_bank
+    path = frappe.get_app_path("hikmat", "public", "testbank.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(_build_test_bank(), f, ensure_ascii=False, separators=(",", ":"))
+    print("=== wrote", path, "===")
 
 
 # ---------------------------------------------------------------------------
@@ -778,6 +881,7 @@ def _load_curriculum():
 
 
 def seed_content():
+    from hikmat.api import default_level
     courses = _load_curriculum()
     seed_structure()   # bands + subjects must exist before tracks Link to them
     # clean slate (dev): remove existing curriculum docs, then recreate
@@ -794,10 +898,12 @@ def seed_content():
             "published": 1 if c["published"] else 0, "sort_order": ti,
         }).insert(ignore_permissions=1)
 
+        n_lessons = len(c.get("lessons", []))
         for li, les in enumerate(c.get("lessons", [])):
             lesson = frappe.get_doc({
                 "doctype": "Lesson", "track": track.name, "lesson_key": les["key"],
                 "title": les["title"], "title_hi": les["titleHi"], "sort_order": li, "published": 1,
+                "level": int(les.get("level") or 0) or default_level(li, n_lessons),
                 "video": les.get("videoUrl", ""), "video_title": les.get("videoTitle", ""),
                 "video_title_hi": les.get("videoTitleHi", ""), "video_duration_secs": les.get("videoDuration") or 0,
                 "words": [{
@@ -869,6 +975,9 @@ def seed_content():
     except Exception:
         pass
     print("=== seeded", len(courses), "tracks ===")
+    # the level-test bank references lessons by name; recreated lessons keep their names, so
+    # seed rows are refreshed here to match whatever content just landed
+    seed_test_bank()
 
 
 def demo_students():
@@ -1116,7 +1225,8 @@ def setup_workspace(cards=None, charts=None):
                  ("Doubts", "Lesson Doubt", "DocType"),
                  ("Daily Attendance", "Daily Attendance", "Report"),
                  ("Attendance Summary", "Attendance Summary", "Report"),
-                 ("Module Tests", "Module Test", "DocType"),
+                 ("Test Questions", "Test Question", "DocType"),
+                 ("Test Levels", "Test Level", "DocType"),
                  ("Test Attempts", "Test Attempt", "DocType"),
                  ("AI Review Queue", "AI Review Queue", "Report"),
                  ("AI Chats", "AI Conversation", "DocType"),

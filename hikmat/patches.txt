@@ -21,3 +21,4 @@ hikmat.patches.v15_allow_capacitor_origin
 hikmat.patches.v16_hindi_repair_and_gender
 hikmat.patches.v17_remove_milestone_gates
 hikmat.patches.v18_seed_activity_rotation
+hikmat.patches.v19_level_tests

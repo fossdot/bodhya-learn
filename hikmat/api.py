@@ -33,6 +33,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 COURSES_CACHE_KEY = "hikmat:courses"
 STRUCTURE_CACHE_KEY = "hikmat:structure"
 SETTINGS_CACHE_KEY = "hikmat:settings"
+TESTBANK_CACHE_KEY = "hikmat:testbank"
 
 
 _CACHE_TTL = 3600  # busted immediately on content edit via doc_events; TTL is a safety net
@@ -50,7 +51,7 @@ def clear_content_cache(doc=None, method=None):
     """Bust the read caches. Wired to content doctype on_update/on_trash in hooks.py,
     and called by setup_data.seed_content(). The (doc, method) args let it be a doc event."""
     c = frappe.cache()
-    for k in (COURSES_CACHE_KEY, STRUCTURE_CACHE_KEY, SETTINGS_CACHE_KEY):
+    for k in (COURSES_CACHE_KEY, STRUCTURE_CACHE_KEY, SETTINGS_CACHE_KEY, TESTBANK_CACHE_KEY):
         c.delete_value(k)
 
 
@@ -790,6 +791,15 @@ def _split_lines(s):
     return [x.strip() for x in (s or "").split("\n") if x.strip() != ""]
 
 
+def default_level(index, n_lessons):
+    """Position-in-track default for a lesson's L1–L5 rung: the first fifth of a track is
+    Level 1, the last fifth Level 5. A learner at Level 1 therefore sees the opening lessons of
+    EVERY track rather than being marched through Class 1–4 content first. Desk can override
+    any lesson's level; this is only what a lesson gets when nobody has."""
+    n = max(1, _int(n_lessons))
+    return min(5, 1 + (max(0, _int(index)) * 5) // n)
+
+
 def _track_json(t, with_content):
     track = {
         "key": t.track_key, "title": t.title, "titleHi": t.title_hi,
@@ -816,11 +826,12 @@ def _track_json(t, with_content):
 
     lessons = frappe.get_all(
         "Lesson", filters={"track": t.name, "published": 1},
-        fields=["name", "lesson_key", "title", "title_hi", "extras_json",
+        fields=["name", "lesson_key", "title", "title_hi", "extras_json", "level",
                 "video", "video_title", "video_title_hi", "video_duration_secs"],
         order_by="sort_order asc, creation asc",
     )
-    for l in lessons:
+    n_lessons = len(lessons)
+    for li, l in enumerate(lessons):
         words = []
         for w in frappe.get_all("Lesson Word", filters={"parent": l.name},
                                 fields=["en", "hi", "pron", "emoji", "word_type", "uncountable", "plural", "use_en", "use_hi"],
@@ -929,6 +940,9 @@ def _track_json(t, with_content):
 
         ld = {
             "key": l.lesson_key, "title": l.title, "titleHi": l.title_hi,
+            # L1–L5 rung. Desk-set when present; otherwise the same position-in-track default
+            # the seed uses, so a Lesson row created before the field existed still lands somewhere.
+            "level": _int(l.get("level")) or default_level(li, n_lessons),
             "words": words, "dialogues": dialogues, "code": code, "fix": fix,
             "email": email, "quiz": quiz, "read": read, "reply": reply,
         }
@@ -952,28 +966,48 @@ def _track_json(t, with_content):
                 pass
         track["lessons"].append(ld)
 
-    # Module test: the question bank ships WITH the curriculum so tests work fully
-    # offline (answers therefore exist in the client payload — accepted tradeoff: the
-    # audience is not dev-tools-savvy, and the anti-cheat targets the realistic threat
-    # of switching apps to ask/look up, not payload inspection). teach/teach_hi are
-    # deliberately NOT exported — no hints inside a test.
-    mt = frappe.db.get_value("Module Test", {"track": t.name, "active": 1},
-                             ["name", "questions_per_paper", "pass_pct", "time_limit_secs",
-                              "intro", "intro_hi"], as_dict=True)
-    if mt:
-        bank = [{"id": q.name, "q": q.question, "qHi": q.question_hi or "",
-                 "emoji": q.emoji or "", "choices": _split_lines(q.choices),
-                 "answer": (q.answer or "").strip()}
-                for q in frappe.get_all("Module Test Question", filters={"parent": mt.name},
-                                        fields=["name", "question", "question_hi", "emoji",
-                                                "choices", "answer"], order_by="idx asc")]
-        if bank:
-            track["test"] = {"questionsPerPaper": _int(mt.questions_per_paper) or 10,
-                             "passPct": _int(mt.pass_pct) or 60,
-                             "timeLimitSecs": _int(mt.time_limit_secs) or 600,
-                             "intro": mt.intro or "", "introHi": mt.intro_hi or "",
-                             "bank": bank}
+    # (The per-track Module Test bank used to ride here. Level tests replaced it on
+    # 2026-09-07 — the bank now ships separately via get_test_bank, keyed by lesson.)
     return track
+
+
+# ---------------------------------------------------------------------------
+# Level tests — the L1–L5 question bank (cached; ships answers, see note)
+# ---------------------------------------------------------------------------
+@frappe.whitelist(allow_guest=True)
+def get_test_bank():
+    """The five Test Level rules plus every active Test Question, keyed by track/lesson so
+    the game can draw a paper from the lessons a learner has actually played — fully offline.
+    Answers therefore exist in the client payload: an accepted tradeoff carried over from the
+    Module Tests (the audience is not dev-tools-savvy; the anti-cheat targets switching apps
+    to look things up, and the server re-grades any paper whose ids it issued). teach /
+    teach_hi are deliberately NOT exported — no hints inside a test."""
+    return _cached(TESTBANK_CACHE_KEY, _build_test_bank)
+
+
+_DIFF_CODE = {"Easy": "e", "Medium": "m", "Hard": "h"}
+
+
+def _build_test_bank():
+    levels = [_level_rules(n) for n in range(1, 6)]
+    bank = []
+    if frappe.db.exists("DocType", "Test Question"):
+        # The row's own `level` is a denormalised copy, so an edit to the Lesson's level after
+        # the question was written would ship stale. The Lesson is the authority here.
+        lesson_level = {l.name: _int(l.level) for l in frappe.get_all("Lesson", fields=["name", "level"])}
+        for q in frappe.get_all("Test Question", filters={"active": 1},
+                                fields=["name", "lesson", "track_key", "lesson_key", "level", "difficulty",
+                                        "question", "question_hi", "emoji", "choices", "answer"],
+                                order_by="track_key asc, lesson_key asc, creation asc"):
+            choices = _split_lines(q.choices)
+            if len(choices) < 2 or (q.answer or "").strip() not in choices:
+                continue                                     # never ship an unanswerable row
+            bank.append({"id": q.name, "t": q.track_key or "", "l": q.lesson_key or "",
+                         "level": lesson_level.get(q.lesson) or _int(q.level) or 1,
+                         "d": _DIFF_CODE.get(q.difficulty, "m"),
+                         "q": q.question, "qHi": q.question_hi or "", "emoji": q.emoji or "",
+                         "choices": choices, "answer": (q.answer or "").strip()})
+    return {"levels": levels, "bank": bank}
 
 
 # Providers the site can actually authenticate against, in the order they should be shown.
@@ -1180,21 +1214,66 @@ def submit_attempt(student=None, token=None, track=None, lesson=None, activity=N
 
 
 _TEST_STATUS = {"completed": "Completed", "exited": "Exited", "timed_out": "Timed Out"}
+DEFAULT_PASS_PCT = 75
+
+
+def _level_rules(level):
+    """The Test Level row for one rung, or the built-in defaults when Desk has none."""
+    d = {"level": level, "title": "Level %d" % level, "titleHi": "स्तर %d" % level, "active": True,
+         "starsRequired": 100, "questionsPerPaper": 20, "passPct": DEFAULT_PASS_PCT,
+         "secs": {"easy": 20, "medium": 30, "hard": 45}, "intro": "", "introHi": ""}
+    if not frappe.db.exists("DocType", "Test Level"):
+        return d
+    r = frappe.db.get_value("Test Level", {"level": level},
+                            ["title", "title_hi", "active", "stars_required", "questions_per_paper",
+                             "pass_pct", "easy_secs", "medium_secs", "hard_secs", "intro", "intro_hi"],
+                            as_dict=True)
+    if not r:
+        return d
+    d.update({"title": r.title or d["title"], "titleHi": r.title_hi or d["titleHi"], "active": bool(r.active),
+              "starsRequired": _int(r.stars_required) or 100, "questionsPerPaper": _int(r.questions_per_paper) or 20,
+              "passPct": _int(r.pass_pct) or DEFAULT_PASS_PCT,
+              "secs": {"easy": _int(r.easy_secs) or 20, "medium": _int(r.medium_secs) or 30, "hard": _int(r.hard_secs) or 45},
+              "intro": r.intro or "", "introHi": r.intro_hi or ""})
+    return d
+
+
+def _grade_paper(ids, answers):
+    """Server-side grading. Returns (correct, graded) counting only ids that resolve to an
+    active Test Question — a paper padded with lesson-quiz fallbacks (ids the server never
+    issued) is graded for the rows it CAN check and trusted for the rest. Both are None when
+    nothing resolves, and the caller falls back to the client's score."""
+    if not ids or not frappe.db.exists("DocType", "Test Question"):
+        return None, None
+    rows = frappe.get_all("Test Question", filters={"name": ["in", ids]}, fields=["name", "answer"])
+    if not rows:
+        return None, None
+    key = {r.name: (r.answer or "").strip() for r in rows}
+    correct = 0
+    for qid in ids:
+        if qid in key and str(answers.get(qid, "")).strip() == key[qid]:
+            correct += 1
+    return correct, len([q for q in ids if q in key])
 
 
 @frappe.whitelist(allow_guest=True)
-def submit_test(student=None, token=None, track=None, paper=None, score=0, total=0,
-                status=None, exit_reason=None, duration_secs=0, lang=None, client_id=None):
-    """Record one module-test attempt (the mandatory end-of-track test). Same
-    hardening as submit_attempt: rate cap, client_id idempotency, active-student +
-    token check, clamps. Two rules are SERVER-enforced so the client can't soften
-    them: an Exited (anti-cheat voided) attempt always scores 0, and pass/fail is
-    recomputed here against the Module Test's pass_pct — a timed-out paper still
-    counts what was answered (running out of time is not cheating)."""
+def submit_test(student=None, token=None, level=0, paper=None, answers=None, score=0, total=0,
+                status=None, exit_reason=None, duration_secs=0, lang=None, client_id=None, track=None):
+    """Record one LEVEL-test attempt (the L1–L5 checkpoint that pauses new lessons until it
+    is passed). Same hardening as submit_attempt: rate cap, client_id idempotency,
+    active-student + token check, clamps. Three rules are SERVER-enforced so the client can't
+    soften them: an Exited (anti-cheat voided) attempt always scores 0; when the paper's ids
+    resolve to Test Question rows the score is RE-GRADED here from `answers` and the client's
+    figure ignored; and pass/fail is recomputed against the Test Level's pass mark (75% by
+    default) — a timed-out paper still counts what was answered (running out of time is not
+    cheating). `track` is accepted for old clients only and stored as-is."""
     if not _rate_ok("testsub:" + _client_ip(), 600, 3600):   # tests are ~10× rarer than activities
         return {"ok": False, "error": "rate_limited"}
     student, client_id = _docname(student), _docname(client_id, 64)   # scalars only, as submit_attempt
     track, lang = _content_key(track), _content_key(lang, 10)         # stored AND used as a filter below
+    level = _int(level)
+    if not (0 <= level <= 5):
+        return {"ok": False, "error": "bad_level"}
     if not student:
         student = _session_student()
     if not student:
@@ -1214,8 +1293,6 @@ def submit_test(student=None, token=None, track=None, paper=None, score=0, total
         return {"ok": False, "error": "bad_status"}
     total = max(0, _int(total))
     score = min(max(0, _int(score)), total)
-    if st == "Exited":                                       # voiding is not client-optional
-        score = 0
     # exit_reason is a client-authored LABEL ("tab_hidden", "blur") that the facilitator's
     # test report renders and exports — identifier-shaped, not her prose, so it gets the
     # formula-lead strip too (see _no_formula_lead).
@@ -1225,11 +1302,24 @@ def submit_test(student=None, token=None, track=None, paper=None, score=0, total
         ids = [str(x)[:140] for x in ids[:100]] if isinstance(ids, list) else []
     except Exception:
         ids = []                                             # telemetry only — never reject the write
+    try:
+        ans = json.loads(answers or "{}")
+        ans = {str(k)[:140]: str(v)[:140] for k, v in list(ans.items())[:100]} if isinstance(ans, dict) else {}
+    except Exception:
+        ans = {}
 
-    pass_pct = 60
-    track_doc = frappe.db.get_value("Track", {"track_key": track}, "name")   # scalar (see above)
-    if track_doc:
-        pass_pct = _int(frappe.db.get_value("Module Test", {"track": track_doc}, "pass_pct")) or 60
+    graded_note = ""
+    if st != "Exited" and ids:
+        correct, graded = _grade_paper(ids, ans)
+        if graded:                                           # server issued (some of) these questions: its grading wins
+            unverifiable = max(0, len(ids) - graded)
+            client_rest = min(max(0, _int(score) - correct), unverifiable) if unverifiable else 0
+            score, total = correct + client_rest, len(ids)
+            graded_note = "server:%d/%d" % (correct, graded)
+    if st == "Exited":                                       # voiding is not client-optional
+        score = 0
+
+    pass_pct = _level_rules(level)["passPct"] if level else DEFAULT_PASS_PCT
     pct = round(100 * score / total) if total else 0
     passed = 1 if st in ("Completed", "Timed Out") and pct >= pass_pct else 0
 
@@ -1237,7 +1327,8 @@ def submit_test(student=None, token=None, track=None, paper=None, score=0, total
         doc = frappe.get_doc({
             "doctype": "Test Attempt", "client_id": client_id or None,
             "student": student, "student_name": sinfo.get("student_name"), "cohort": sinfo.get("cohort"),
-            "track": track, "paper": json.dumps(ids),
+            "track": track, "level": level or None, "paper": json.dumps(ids),
+            "answers": json.dumps(ans, ensure_ascii=False) if ans else "",
             "score": score, "total": total, "pct": pct, "passed": passed,
             "status": st, "exit_reason": exit_reason,
             "duration_secs": max(0, min(7200, _int(duration_secs))),
@@ -1249,7 +1340,8 @@ def submit_test(student=None, token=None, track=None, paper=None, score=0, total
         existing = frappe.db.get_value("Test Attempt", {"client_id": client_id}, "name")
         return {"ok": True, "name": existing, "dedup": True}
     frappe.db.commit()
-    return {"ok": True, "name": doc.name, "passed": bool(passed), "pct": pct}
+    return {"ok": True, "name": doc.name, "passed": bool(passed), "pct": pct, "score": score,
+            "total": total, "graded": graded_note}
 
 
 # ---------------------------------------------------------------------------
@@ -1275,13 +1367,6 @@ def validate_cohort(doc, method=None):
     same rule server-side so an API/script insert can't create an undated Offline batch."""
     if (doc.mode or "Offline") == "Offline" and not doc.start_date:
         frappe.throw(_("An Offline cohort needs a start date."), frappe.MandatoryError)
-
-
-def stamp_evaluation(doc, method=None):
-    """doc_events hook: when a facilitator sets an outcome in Desk, stamp who/when."""
-    if doc.status in ("Passed", "Needs Practice") and not doc.evaluated_on:
-        doc.evaluated_by = frappe.session.user
-        doc.evaluated_on = frappe.utils.now()
 
 
 # ---------------------------------------------------------------------------
@@ -3739,28 +3824,38 @@ def get_progress(student=None, token=None):
     prog = {}
     for r in rows:
         prog.setdefault(r.track, {}).setdefault(r.lesson, {})[r.activity] = r.stars or 0
-    # Module tests: pass/best per track, plus the union of every question id this
-    # student has ever been served (ordered by first exposure) — so a girl on a NEW
-    # device keeps her no-repeat guarantee once she's online. Bounded by bank sizes.
-    tests = {}
+    # Level tests: pass/best per level (L1–L5), plus the union of every question id this
+    # student has ever been served (ordered by first exposure, keyed "L<n>") — so a girl on
+    # a NEW device keeps her no-repeat guarantee once she's online. Bounded by bank sizes.
+    # `tests` (per-track) is kept for rows from the retired Module Tests so old clients still parse.
+    tests, levels = {}, {}
     for r in frappe.db.sql(
-            """select track, max(passed) as passed, max(pct) as best, count(*) as attempts
-               from `tabTest Attempt` where student=%s group by track""", student, as_dict=True):
-        tests[r.track] = {"passed": bool(r.passed), "bestPct": _int(r.best), "attempts": _int(r.attempts)}
+            """select track, ifnull(level, 0) as level, max(passed) as passed, max(pct) as best,
+                      count(*) as attempts
+               from `tabTest Attempt` where student=%s group by track, ifnull(level, 0)""",
+            student, as_dict=True):
+        rec = {"passed": bool(r.passed), "bestPct": _int(r.best), "attempts": _int(r.attempts)}
+        if _int(r.level):
+            levels[str(_int(r.level))] = rec
+        elif r.track:
+            tests[r.track] = rec
     test_seen = {}
-    if tests:
+    if tests or levels:
         for a in frappe.get_all("Test Attempt", filters={"student": student},
-                                fields=["track", "paper"], order_by="attempted_on asc, creation asc"):
+                                fields=["track", "level", "paper"], order_by="attempted_on asc, creation asc"):
             try:
                 ids = json.loads(a.paper or "[]")
             except Exception:
                 ids = []
-            dst = test_seen.setdefault(a.track, [])
+            key = ("L%d" % _int(a.level)) if _int(a.level) else (a.track or "")
+            if not key:
+                continue
+            dst = test_seen.setdefault(key, [])
             for qid in ids:
                 if qid not in dst:
                     dst.append(qid)
     return {"progress": prog, "gems": _total_gems(student),
-            "tests": tests, "testSeen": test_seen}
+            "tests": tests, "levels": levels, "testSeen": test_seen}
 
 
 # ---------------------------------------------------------------------------

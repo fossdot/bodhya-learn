@@ -13,6 +13,7 @@
     "key": "l01",
     "title": "Vegetables at the Bazaar",
     "titleHi": "बाज़ार में सब्ज़ियाँ",
+    "level": 1,
     "words": [
      {
       "en": "potato",
@@ -137,6 +138,7 @@
     "key": "l02",
     "title": "Fruits at the Bazaar",
     "titleHi": "बाज़ार में फल",
+    "level": 1,
     "words": [
      {
       "en": "mango",
@@ -326,6 +328,7 @@
     "key": "l03",
     "title": "Grains and Spices",
     "titleHi": "अनाज और मसाले",
+    "level": 2,
     "words": [
      {
       "en": "rice",
@@ -590,6 +593,7 @@
     "key": "l04",
     "title": "How Much? Quantities",
     "titleHi": "कितना? मात्रा",
+    "level": 2,
     "words": [
      {
       "en": "kilo",
@@ -735,6 +739,7 @@
     "key": "l05",
     "title": "Money and Rupees",
     "titleHi": "पैसा और रुपये",
+    "level": 3,
     "words": [
      {
       "en": "rupee",
@@ -886,6 +891,7 @@
     "key": "l06",
     "title": "Asking the Price",
     "titleHi": "कीमत पूछना",
+    "level": 3,
     "words": [
      {
       "en": "cost",
@@ -1063,6 +1069,7 @@
     "key": "l07",
     "title": "Polite Bargaining",
     "titleHi": "मोल-भाव करना",
+    "level": 4,
     "words": [
      {
       "en": "less",
@@ -1259,6 +1266,7 @@
     "key": "l08",
     "title": "Talking at the Counter",
     "titleHi": "दुकान पर बातचीत",
+    "level": 4,
     "words": [
      {
       "en": "shop",
@@ -1422,6 +1430,7 @@
     "key": "l09",
     "title": "Weighing and Buying",
     "titleHi": "तौलना और खरीदना",
+    "level": 5,
     "words": [
      {
       "en": "scale",
@@ -1591,6 +1600,7 @@
     "key": "l10",
     "title": "A Full Polite Purchase",
     "titleHi": "पूरी विनम्र खरीदारी",
+    "level": 5,
     "words": [
      {
       "en": "please",
@@ -1817,6 +1827,7 @@
     "key": "l01",
     "title": "Rooms in My House",
     "titleHi": "मेरे घर के कमरे",
+    "level": 1,
     "words": [
      {
       "en": "house",
@@ -1936,6 +1947,7 @@
     "key": "l02",
     "title": "In the Kitchen",
     "titleHi": "रसोई में",
+    "level": 1,
     "words": [
      {
       "en": "kitchen",
@@ -2110,6 +2122,7 @@
     "key": "l03",
     "title": "Things at Home",
     "titleHi": "घर की चीज़ें",
+    "level": 2,
     "words": [
      {
       "en": "chair",
@@ -2312,6 +2325,7 @@
     "key": "l04",
     "title": "My Family",
     "titleHi": "मेरा परिवार",
+    "level": 2,
     "words": [
      {
       "en": "mother",
@@ -2456,6 +2470,7 @@
     "key": "l05",
     "title": "My Daily Routine",
     "titleHi": "मेरी दिनचर्या",
+    "level": 3,
     "words": [
      {
       "en": "wake up",
@@ -2618,6 +2633,7 @@
     "key": "l06",
     "title": "Time of Day",
     "titleHi": "दिन का समय",
+    "level": 3,
     "words": [
      {
       "en": "morning",
@@ -2811,6 +2827,7 @@
     "key": "l07",
     "title": "Helping with Chores",
     "titleHi": "घर के काम में मदद",
+    "level": 4,
     "words": [
      {
       "en": "clean",
@@ -2995,6 +3012,7 @@
     "key": "l08",
     "title": "Polite Requests",
     "titleHi": "विनम्र निवेदन",
+    "level": 4,
     "words": [
      {
       "en": "please",
@@ -3126,6 +3144,7 @@
     "key": "l09",
     "title": "At Mealtime",
     "titleHi": "खाने के समय",
+    "level": 5,
     "words": [
      {
       "en": "breakfast",
@@ -3335,6 +3354,7 @@
     "key": "l10",
     "title": "A Talk at Home",
     "titleHi": "घर में बातचीत",
+    "level": 5,
     "words": [
      {
       "en": "tired",
@@ -3525,6 +3545,7 @@
     "key": "l01",
     "title": "In My School Bag",
     "titleHi": "मेरे स्कूल बैग में",
+    "level": 1,
     "words": [
      {
       "en": "bag",
@@ -3700,6 +3721,7 @@
     "key": "l02",
     "title": "More School Things",
     "titleHi": "और स्कूल की चीज़ें",
+    "level": 1,
     "words": [
      {
       "en": "ruler",
@@ -3872,6 +3894,7 @@
     "key": "l03",
     "title": "People at School",
     "titleHi": "स्कूल के लोग",
+    "level": 2,
     "words": [
      {
       "en": "teacher",
@@ -4075,6 +4098,7 @@
     "key": "l04",
     "title": "In the Classroom",
     "titleHi": "कक्षा के अंदर",
+    "level": 2,
     "words": [
      {
       "en": "class",
@@ -4234,6 +4258,7 @@
     "key": "l05",
     "title": "Subjects We Study",
     "titleHi": "हम जो विषय पढ़ते हैं",
+    "level": 3,
     "words": [
      {
       "en": "subject",
@@ -4416,6 +4441,7 @@
     "key": "l06",
     "title": "What We Do in Class",
     "titleHi": "हम कक्षा में क्या करते हैं",
+    "level": 3,
     "words": [
      {
       "en": "read",
@@ -4599,6 +4625,7 @@
     "key": "l07",
     "title": "Days and Time at School",
     "titleHi": "स्कूल में दिन और समय",
+    "level": 4,
     "words": [
      {
       "en": "today",
@@ -4769,6 +4796,7 @@
     "key": "l08",
     "title": "Asking Permission",
     "titleHi": "अनुमति माँगना",
+    "level": 4,
     "words": [
      {
       "en": "please",
@@ -4937,6 +4965,7 @@
     "key": "l09",
     "title": "Asking Questions in Class",
     "titleHi": "कक्षा में सवाल पूछना",
+    "level": 5,
     "words": [
      {
       "en": "question",
@@ -5104,6 +5133,7 @@
     "key": "l10",
     "title": "A Day in Class",
     "titleHi": "कक्षा में एक दिन",
+    "level": 5,
     "words": [
      {
       "en": "homework",
@@ -5277,6 +5307,7 @@
     "key": "l01",
     "title": "What is a Computer",
     "titleHi": "कंप्यूटर क्या है",
+    "level": 1,
     "words": [
      {
       "en": "computer",
@@ -5406,6 +5437,7 @@
     "key": "l02",
     "title": "Parts of a Computer",
     "titleHi": "कंप्यूटर के भाग",
+    "level": 1,
     "words": [
      {
       "en": "monitor",
@@ -5599,6 +5631,7 @@
     "key": "l03",
     "title": "Using the Mouse",
     "titleHi": "माउस का उपयोग",
+    "level": 1,
     "words": [
      {
       "en": "click",
@@ -5758,6 +5791,7 @@
     "key": "l04",
     "title": "Using the Keyboard",
     "titleHi": "कीबोर्ड का उपयोग",
+    "level": 1,
     "words": [
      {
       "en": "key",
@@ -5896,6 +5930,7 @@
     "key": "l05",
     "title": "The Desktop and Icons",
     "titleHi": "डेस्कटॉप और आइकन",
+    "level": 1,
     "words": [
      {
       "en": "desktop",
@@ -6014,6 +6049,7 @@
     "key": "l06",
     "title": "Files and Folders",
     "titleHi": "फ़ाइलें और फ़ोल्डर",
+    "level": 2,
     "words": [
      {
       "en": "file",
@@ -6188,6 +6224,7 @@
     "key": "l07",
     "title": "Editing Files",
     "titleHi": "फ़ाइलें संपादित करना",
+    "level": 2,
     "words": [
      {
       "en": "copy",
@@ -6358,6 +6395,7 @@
     "key": "l08",
     "title": "The Internet",
     "titleHi": "इंटरनेट",
+    "level": 2,
     "words": [
      {
       "en": "internet",
@@ -6539,6 +6577,7 @@
     "key": "l09",
     "title": "Email",
     "titleHi": "ईमेल",
+    "level": 2,
     "words": [
      {
       "en": "email",
@@ -6870,6 +6909,7 @@
     "key": "l10",
     "title": "Typing Documents",
     "titleHi": "दस्तावेज़ टाइप करना",
+    "level": 2,
     "words": [
      {
       "en": "document",
@@ -7126,6 +7166,7 @@
     "key": "l11",
     "title": "Spreadsheets",
     "titleHi": "स्प्रेडशीट",
+    "level": 3,
     "words": [
      {
       "en": "spreadsheet",
@@ -7294,6 +7335,7 @@
     "key": "l12",
     "title": "Accounts and Passwords",
     "titleHi": "खाते और पासवर्ड",
+    "level": 3,
     "words": [
      {
       "en": "account",
@@ -7474,6 +7516,7 @@
     "key": "l13",
     "title": "Apps and Software",
     "titleHi": "ऐप और सॉफ़्टवेयर",
+    "level": 3,
     "words": [
      {
       "en": "software",
@@ -7645,6 +7688,7 @@
     "key": "l14",
     "title": "Hardware and Devices",
     "titleHi": "हार्डवेयर और उपकरण",
+    "level": 3,
     "words": [
      {
       "en": "hardware",
@@ -7793,6 +7837,7 @@
     "key": "l15",
     "title": "Networks and Wi-Fi",
     "titleHi": "नेटवर्क और वाई-फ़ाई",
+    "level": 3,
     "words": [
      {
       "en": "network",
@@ -7941,6 +7986,7 @@
     "key": "l16",
     "title": "Online and Cloud",
     "titleHi": "ऑनलाइन और क्लाउड",
+    "level": 4,
     "words": [
      {
       "en": "online",
@@ -8222,6 +8268,7 @@
     "key": "l17",
     "title": "Data and Backup",
     "titleHi": "डेटा और बैकअप",
+    "level": 4,
     "words": [
      {
       "en": "data",
@@ -8382,6 +8429,7 @@
     "key": "l18",
     "title": "Coding: First Steps",
     "titleHi": "कोडिंग: पहले कदम",
+    "level": 4,
     "words": [
      {
       "en": "code",
@@ -8611,6 +8659,7 @@
     "key": "l19",
     "title": "Coding: Variables and Values",
     "titleHi": "कोडिंग: वैरिएबल और मान",
+    "level": 4,
     "words": [
      {
       "en": "variable",
@@ -8818,6 +8867,7 @@
     "key": "l20",
     "title": "Coding: Loops and Choices",
     "titleHi": "कोडिंग: लूप और चुनाव",
+    "level": 4,
     "words": [
      {
       "en": "loop",
@@ -9026,6 +9076,7 @@
     "key": "l21",
     "title": "Coding: Functions and Bugs",
     "titleHi": "कोडिंग: फ़ंक्शन और बग",
+    "level": 5,
     "words": [
      {
       "en": "function",
@@ -9259,6 +9310,7 @@
     "key": "l22",
     "title": "Databases",
     "titleHi": "डेटाबेस",
+    "level": 5,
     "words": [
      {
       "en": "database",
@@ -9445,6 +9497,7 @@
     "key": "l23",
     "title": "Artificial Intelligence",
     "titleHi": "आर्टिफ़िशियल इंटेलिजेंस",
+    "level": 5,
     "words": [
      {
       "en": "intelligence",
@@ -9584,6 +9637,7 @@
     "key": "l24",
     "title": "Staying Safe Online",
     "titleHi": "ऑनलाइन सुरक्षित रहना",
+    "level": 5,
     "words": [
      {
       "en": "virus",
@@ -9900,6 +9954,7 @@
     "key": "l25",
     "title": "Working in IT",
     "titleHi": "आईटी में काम करना",
+    "level": 5,
     "words": [
      {
       "en": "team",
@@ -10212,6 +10267,7 @@
     "key": "l01",
     "title": "ABC Sounds",
     "titleHi": "ए बी सी ध्वनि",
+    "level": 1,
     "words": [
      {
       "en": "apple",
@@ -10455,6 +10511,7 @@
     "key": "l02",
     "title": "Colours",
     "titleHi": "रंग",
+    "level": 1,
     "words": [
      {
       "en": "red",
@@ -10606,6 +10663,7 @@
     "key": "l03",
     "title": "Number Words",
     "titleHi": "गिनती के शब्द",
+    "level": 2,
     "words": [
      {
       "en": "one",
@@ -10816,6 +10874,7 @@
     "key": "l04",
     "title": "My Family",
     "titleHi": "मेरा परिवार",
+    "level": 2,
     "words": [
      {
       "en": "mother",
@@ -10997,6 +11056,7 @@
     "key": "l05",
     "title": "Fruits and Food",
     "titleHi": "फल और भोजन",
+    "level": 3,
     "words": [
      {
       "en": "mango",
@@ -11107,6 +11167,7 @@
     "key": "l06",
     "title": "Action Words",
     "titleHi": "काम के शब्द",
+    "level": 3,
     "words": [
      {
       "en": "run",
@@ -11285,6 +11346,7 @@
     "key": "l07",
     "title": "My Home",
     "titleHi": "मेरा घर",
+    "level": 4,
     "words": [
      {
       "en": "house",
@@ -11416,6 +11478,7 @@
     "key": "l08",
     "title": "School Things",
     "titleHi": "स्कूल की चीज़ें",
+    "level": 4,
     "words": [
      {
       "en": "book",
@@ -11543,6 +11606,7 @@
     "key": "l09",
     "title": "Village Places",
     "titleHi": "गाँव की जगहें",
+    "level": 5,
     "words": [
      {
       "en": "shop",
@@ -11711,6 +11775,7 @@
     "key": "l10",
     "title": "Polite Words",
     "titleHi": "मीठे शब्द",
+    "level": 5,
     "words": [
      {
       "en": "hello",
@@ -11891,6 +11956,7 @@
     "key": "l01",
     "title": "Count 1 to 10",
     "titleHi": "1 से 10 गिनती",
+    "level": 1,
     "quiz": [
      {
       "q": "How many apples?",
@@ -12031,6 +12097,7 @@
     "key": "l02",
     "title": "Adding Small Numbers",
     "titleHi": "छोटे जोड़",
+    "level": 1,
     "quiz": [
      {
       "q": "2 + 1 = ?",
@@ -12203,6 +12270,7 @@
     "key": "l03",
     "title": "Shapes",
     "titleHi": "आकार",
+    "level": 1,
     "words": [
      {
       "en": "circle",
@@ -12325,6 +12393,7 @@
     "key": "l04",
     "title": "Take Away (Subtraction)",
     "titleHi": "घटाना (कम करना)",
+    "level": 2,
     "quiz": [
      {
       "q": "5 apples. Take away 2. How many are left?",
@@ -12448,6 +12517,7 @@
     "key": "l05",
     "title": "Numbers 11 to 20",
     "titleHi": "11 से 20 तक गिनती",
+    "level": 2,
     "quiz": [
      {
       "q": "Count the stars. How many in all?",
@@ -12617,6 +12687,7 @@
     "key": "l06",
     "title": "More or Less",
     "titleHi": "ज़्यादा या कम",
+    "level": 3,
     "quiz": [
      {
       "q": "Which number is bigger, 5 or 2?",
@@ -12741,6 +12812,7 @@
     "key": "l07",
     "title": "Money and Coins",
     "titleHi": "पैसा और सिक्के",
+    "level": 3,
     "words": [
      {
       "en": "coin",
@@ -12880,6 +12952,7 @@
     "key": "l08",
     "title": "Adding up to 20",
     "titleHi": "20 तक जोड़",
+    "level": 4,
     "quiz": [
      {
       "q": "8 + 5 = ?",
@@ -13043,6 +13116,7 @@
     "key": "l09",
     "title": "Numbers 21 to 50",
     "titleHi": "21 से 50 तक गिनती",
+    "level": 4,
     "quiz": [
      {
       "q": "What comes just after 29?",
@@ -13222,6 +13296,7 @@
     "key": "l10",
     "title": "Reading the Clock",
     "titleHi": "घड़ी देखना",
+    "level": 5,
     "quiz": [
      {
       "q": "The small hand is on 7 and the big hand is on 12. What time is it?",
@@ -13341,6 +13416,7 @@
     "key": "l11",
     "title": "Market Math",
     "titleHi": "बाज़ार का हिसाब",
+    "level": 5,
     "quiz": [
      {
       "q": "One kilo of potatoes costs ₹20. You give a ₹50 note. How much do you get back?",
@@ -13497,6 +13573,7 @@
     "key": "l01",
     "title": "My Body",
     "titleHi": "मेरा शरीर",
+    "level": 1,
     "words": [
      {
       "en": "hand",
@@ -13609,6 +13686,7 @@
     "key": "l02",
     "title": "Animals",
     "titleHi": "जानवर",
+    "level": 1,
     "words": [
      {
       "en": "cow",
@@ -13779,6 +13857,7 @@
     "key": "l03",
     "title": "Plants & Trees",
     "titleHi": "पेड़-पौधे",
+    "level": 2,
     "words": [
      {
       "en": "tree",
@@ -13917,6 +13996,7 @@
     "key": "l04",
     "title": "Food We Eat",
     "titleHi": "हमारा खाना",
+    "level": 2,
     "words": [
      {
       "en": "roti",
@@ -14078,6 +14158,7 @@
     "key": "l05",
     "title": "Water & Clean Habits",
     "titleHi": "पानी और सफ़ाई",
+    "level": 3,
     "words": [
      {
       "en": "water",
@@ -14251,6 +14332,7 @@
     "key": "l06",
     "title": "How We Travel",
     "titleHi": "हम कैसे जाते हैं",
+    "level": 3,
     "words": [
      {
       "en": "bus",
@@ -14394,6 +14476,7 @@
     "key": "l07",
     "title": "Sun, Moon and Sky",
     "titleHi": "सूरज, चाँद और आसमान",
+    "level": 4,
     "words": [
      {
       "en": "sun",
@@ -14569,6 +14652,7 @@
     "key": "l08",
     "title": "Birds Around Us",
     "titleHi": "हमारे पक्षी",
+    "level": 4,
     "words": [
      {
       "en": "pigeon",
@@ -14719,6 +14803,7 @@
     "key": "l09",
     "title": "On the Farm",
     "titleHi": "खेत-खलिहान",
+    "level": 5,
     "words": [
      {
       "en": "farmer",
@@ -14884,6 +14969,7 @@
     "key": "l10",
     "title": "Small Creatures",
     "titleHi": "छोटे जीव",
+    "level": 5,
     "words": [
      {
       "en": "butterfly",
@@ -15025,6 +15111,7 @@
     "key": "l01",
     "title": "Nouns & Verbs",
     "titleHi": "संज्ञा और क्रिया",
+    "level": 1,
     "quiz": [
      {
       "q": "Which word is a noun (naming word)?",
@@ -15224,6 +15311,7 @@
     "key": "l02",
     "title": "Past & Present",
     "titleHi": "भूत और वर्तमान",
+    "level": 1,
     "quiz": [
      {
       "q": "Past tense of 'go'?",
@@ -15381,6 +15469,7 @@
     "key": "l03",
     "title": "Adjectives & Adverbs",
     "titleHi": "विशेषण और क्रिया-विशेषण",
+    "level": 2,
     "quiz": [
      {
       "q": "Which word is an adjective (describing word)?",
@@ -15578,6 +15667,7 @@
     "key": "l04",
     "title": "Articles (a / an / the)",
     "titleHi": "आर्टिकल (a / an / the)",
+    "level": 2,
     "quiz": [
      {
       "q": "Choose the word: '___ apple'.",
@@ -15770,6 +15860,7 @@
     "key": "l05",
     "title": "Pronouns (he/she/it/they)",
     "titleHi": "सर्वनाम (he/she/it/they)",
+    "level": 3,
     "quiz": [
      {
       "q": "Which pronoun replaces 'the girl'?",
@@ -15945,6 +16036,7 @@
     "key": "l06",
     "title": "Prepositions (in/on/under/at)",
     "titleHi": "पूर्वसर्ग (in/on/under/at)",
+    "level": 3,
     "quiz": [
      {
       "q": "We cannot see the cat; it is ___ the box.",
@@ -16110,6 +16202,7 @@
     "key": "l07",
     "title": "Plurals (one & many)",
     "titleHi": "वचन: एक और अनेक (-s / -es)",
+    "level": 4,
     "quiz": [
      {
       "q": "One book, two ___?",
@@ -16310,6 +16403,7 @@
     "key": "l08",
     "title": "Question Words (what/where/when/who)",
     "titleHi": "प्रश्नवाचक शब्द (what/where/when/who)",
+    "level": 4,
     "quiz": [
      {
       "q": "___ is your name?",
@@ -16539,6 +16633,7 @@
     "key": "l09",
     "title": "Conjunctions (and/but/because)",
     "titleHi": "जोड़ने वाले शब्द (and/but/because)",
+    "level": 5,
     "quiz": [
      {
       "q": "I bought potatoes ___ onions at the mandi.",
@@ -16691,6 +16786,7 @@
     "key": "l10",
     "title": "Future Tense (will)",
     "titleHi": "भविष्यत् काल (will)",
+    "level": 5,
     "quiz": [
      {
       "q": "Tomorrow I ___ go to the mela.",
@@ -16891,6 +16987,7 @@
     "key": "l01",
     "title": "Multiplication",
     "titleHi": "गुणा",
+    "level": 1,
     "quiz": [
      {
       "q": "7 × 8 = ?",
@@ -17052,6 +17149,7 @@
     "key": "l02",
     "title": "Fractions",
     "titleHi": "भिन्न",
+    "level": 1,
     "quiz": [
      {
       "q": "What is 1/2 of 8?",
@@ -17215,6 +17313,7 @@
     "key": "l03",
     "title": "Division",
     "titleHi": "भाग",
+    "level": 2,
     "quiz": [
      {
       "q": "Share 36 pencils equally among 4 girls. Each gets?",
@@ -17331,6 +17430,7 @@
     "key": "l04",
     "title": "Decimals",
     "titleHi": "दशमलव",
+    "level": 2,
     "quiz": [
      {
       "q": "0.5 + 0.5 = ?",
@@ -17476,6 +17576,7 @@
     "key": "l05",
     "title": "Factors and Multiples",
     "titleHi": "गुणनखंड और गुणज",
+    "level": 3,
     "quiz": [
      {
       "q": "Which number is a factor of 12?",
@@ -17634,6 +17735,7 @@
     "key": "l06",
     "title": "Percentages",
     "titleHi": "प्रतिशत",
+    "level": 3,
     "quiz": [
      {
       "q": "What is 50% of 20?",
@@ -17783,6 +17885,7 @@
     "key": "l07",
     "title": "Profit and Loss",
     "titleHi": "लाभ और हानि",
+    "level": 4,
     "quiz": [
      {
       "q": "Rekha buys a pen for ₹10 and sells it for ₹12. What is her profit?",
@@ -17928,6 +18031,7 @@
     "key": "l08",
     "title": "Simple Interest",
     "titleHi": "साधारण ब्याज",
+    "level": 4,
     "quiz": [
      {
       "q": "You save ₹100 in the bank at 10% per year. How much interest will you get after 1 year?",
@@ -18059,6 +18163,7 @@
     "key": "l09",
     "title": "Ratio and Proportion",
     "titleHi": "अनुपात और समानुपात",
+    "level": 5,
     "quiz": [
      {
       "q": "For chai, you mix 1 cup of milk and 2 cups of water. What is the ratio of milk to water?",
@@ -18198,6 +18303,7 @@
     "key": "l10",
     "title": "Averages",
     "titleHi": "औसत",
+    "level": 5,
     "quiz": [
      {
       "q": "What is the average of 2, 4 and 6?",
@@ -18330,6 +18436,7 @@
     "key": "l01",
     "title": "States of Matter",
     "titleHi": "पदार्थ की अवस्थाएँ",
+    "level": 1,
     "words": [
      {
       "en": "solid",
@@ -18518,6 +18625,7 @@
     "key": "l02",
     "title": "The Solar System",
     "titleHi": "सौर मंडल",
+    "level": 1,
     "words": [
      {
       "en": "sun",
@@ -18647,6 +18755,7 @@
     "key": "l03",
     "title": "Plants — Parts & Photosynthesis",
     "titleHi": "पौधे — भाग और प्रकाश-संश्लेषण",
+    "level": 2,
     "words": [
      {
       "en": "root",
@@ -18827,6 +18936,7 @@
     "key": "l04",
     "title": "The Human Body & Organ Systems",
     "titleHi": "मानव शरीर और अंग-तंत्र",
+    "level": 2,
     "words": [
      {
       "en": "heart",
@@ -18976,6 +19086,7 @@
     "key": "l05",
     "title": "The Water Cycle",
     "titleHi": "जल चक्र",
+    "level": 3,
     "words": [
      {
       "en": "cloud",
@@ -19161,6 +19272,7 @@
     "key": "l06",
     "title": "Food & Nutrition",
     "titleHi": "भोजन और पोषण",
+    "level": 3,
     "words": [
      {
       "en": "protein",
@@ -19330,6 +19442,7 @@
     "key": "l07",
     "title": "Air Around Us",
     "titleHi": "हमारे चारों ओर हवा",
+    "level": 4,
     "words": [
      {
       "en": "air",
@@ -19517,6 +19630,7 @@
     "key": "l08",
     "title": "Light and Shadow",
     "titleHi": "प्रकाश और छाया",
+    "level": 4,
     "words": [
      {
       "en": "light",
@@ -19652,6 +19766,7 @@
     "key": "l09",
     "title": "Electricity at Home",
     "titleHi": "घर में बिजली",
+    "level": 5,
     "words": [
      {
       "en": "bulb",
@@ -19830,6 +19945,7 @@
     "key": "l10",
     "title": "Soil and Farming",
     "titleHi": "मिट्टी और खेती",
+    "level": 5,
     "words": [
      {
       "en": "soil",
@@ -20012,6 +20128,7 @@
     "key": "l01",
     "title": "Grammar & Usage",
     "titleHi": "व्याकरण और प्रयोग",
+    "level": 1,
     "quiz": [
      {
       "q": "Choose the correct verb: 'Neither of the boys ___ here.'",
@@ -20143,6 +20260,7 @@
     "key": "l02",
     "title": "Tenses (All Forms)",
     "titleHi": "काल (सभी रूप)",
+    "level": 1,
     "quiz": [
      {
       "q": "Which sentence is in the present perfect tense?",
@@ -20316,6 +20434,7 @@
     "key": "l03",
     "title": "Direct & Indirect Speech",
     "titleHi": "प्रत्यक्ष और अप्रत्यक्ष कथन",
+    "level": 2,
     "quiz": [
      {
       "q": "Report it: He said, 'I am tired.'",
@@ -20454,6 +20573,7 @@
     "key": "l04",
     "title": "Active & Passive Voice",
     "titleHi": "कर्तृवाच्य और कर्मवाच्य",
+    "level": 2,
     "quiz": [
      {
       "q": "Change to passive voice: 'The teacher praised the girl.'",
@@ -20627,6 +20747,7 @@
     "key": "l05",
     "title": "Reading Comprehension",
     "titleHi": "पठन बोध",
+    "level": 3,
     "quiz": [
      {
       "q": "In 'The report was meticulous,' which word is closest in meaning to 'meticulous'?",
@@ -20769,6 +20890,7 @@
     "key": "l06",
     "title": "Modals (Must, Might, Could)",
     "titleHi": "मोडल क्रियाएँ (must, might, could)",
+    "level": 3,
     "quiz": [
      {
       "q": "Choose the correct modal: 'You ___ wear a helmet while riding a motorcycle.'",
@@ -20934,6 +21056,7 @@
     "key": "l07",
     "title": "Conjunctions & Clauses",
     "titleHi": "संयोजक और उपवाक्य",
+    "level": 4,
     "quiz": [
      {
       "q": "Join the ideas: 'She was tired. Still, she finished her homework.'",
@@ -21072,6 +21195,7 @@
     "key": "l08",
     "title": "Prepositions & Phrasal Verbs",
     "titleHi": "पूर्वसर्ग और फ्रेज़ल वर्ब",
+    "level": 4,
     "quiz": [
      {
       "q": "'The train arrived ___ the station ___ six o'clock.' Choose the pair.",
@@ -21231,6 +21355,7 @@
     "key": "l09",
     "title": "Formal Letters & Applications",
     "titleHi": "औपचारिक पत्र और आवेदन",
+    "level": 5,
     "quiz": [
      {
       "q": "Which is the correct way to begin a formal application to your Principal?",
@@ -21496,6 +21621,7 @@
     "key": "l01",
     "title": "Linear Equations",
     "titleHi": "रैखिक समीकरण",
+    "level": 1,
     "quiz": [
      {
       "q": "Solve: x + 3 = 7.  x = ?",
@@ -21616,6 +21742,7 @@
     "key": "l02",
     "title": "Polynomials",
     "titleHi": "बहुपद",
+    "level": 1,
     "quiz": [
      {
       "q": "What is the degree of 3x² + 5x + 1?",
@@ -21763,6 +21890,7 @@
     "key": "l03",
     "title": "Quadratic Equations",
     "titleHi": "द्विघात समीकरण",
+    "level": 2,
     "quiz": [
      {
       "q": "Which is a quadratic equation?",
@@ -21881,6 +22009,7 @@
     "key": "l04",
     "title": "Exponents & Powers",
     "titleHi": "घातांक और घात",
+    "level": 2,
     "quiz": [
      {
       "q": "What is 2³?",
@@ -22009,6 +22138,7 @@
     "key": "l05",
     "title": "Arithmetic Progressions",
     "titleHi": "समांतर श्रेढ़ी",
+    "level": 3,
     "quiz": [
      {
       "q": "Common difference of 2, 5, 8, 11, … ?",
@@ -22140,6 +22270,7 @@
     "key": "l06",
     "title": "Pair of Linear Equations",
     "titleHi": "रैखिक समीकरण युग्म",
+    "level": 3,
     "quiz": [
      {
       "q": "If x + y = 10 and x − y = 2, what is x?",
@@ -22258,6 +22389,7 @@
     "key": "l07",
     "title": "Factorisation",
     "titleHi": "गुणनखंडन",
+    "level": 4,
     "quiz": [
      {
       "q": "Factorise: x² + 5x = ?",
@@ -22397,6 +22529,7 @@
     "key": "l08",
     "title": "Quadratic Formula",
     "titleHi": "द्विघात सूत्र",
+    "level": 4,
     "quiz": [
      {
       "q": "In x² − 5x + 6 = 0, what are a, b, c?",
@@ -22515,6 +22648,7 @@
     "key": "l09",
     "title": "Word Problems with Equations",
     "titleHi": "समीकरण से इबारती सवाल",
+    "level": 5,
     "quiz": [
      {
       "q": "Sita is x years old, her mother is 3x. Together they are 48. Find x.",
@@ -22663,6 +22797,7 @@
     "key": "l01",
     "title": "Force & Motion",
     "titleHi": "बल और गति",
+    "level": 1,
     "words": [
      {
       "en": "force",
@@ -22814,6 +22949,7 @@
     "key": "l02",
     "title": "Atoms & Elements",
     "titleHi": "परमाणु और तत्व",
+    "level": 1,
     "words": [
      {
       "en": "atom",
@@ -22983,6 +23119,7 @@
     "key": "l03",
     "title": "Work, Energy & Power",
     "titleHi": "कार्य, ऊर्जा और शक्ति",
+    "level": 2,
     "words": [
      {
       "en": "work",
@@ -23116,6 +23253,7 @@
     "key": "l04",
     "title": "Light — Reflection & Refraction",
     "titleHi": "प्रकाश — परावर्तन और अपवर्तन",
+    "level": 2,
     "words": [
      {
       "en": "reflection",
@@ -23273,6 +23411,7 @@
     "key": "l05",
     "title": "Electricity & Simple Circuits",
     "titleHi": "विद्युत और सरल परिपथ",
+    "level": 3,
     "words": [
      {
       "en": "current",
@@ -23444,6 +23583,7 @@
     "key": "l06",
     "title": "Acids, Bases & Salts",
     "titleHi": "अम्ल, क्षार और नमक",
+    "level": 3,
     "words": [
      {
       "en": "acid",
@@ -23603,6 +23743,7 @@
     "key": "l07",
     "title": "Sound",
     "titleHi": "ध्वनि",
+    "level": 4,
     "words": [
      {
       "en": "sound",
@@ -23790,6 +23931,7 @@
     "key": "l08",
     "title": "Gravitation",
     "titleHi": "गुरुत्वाकर्षण",
+    "level": 4,
     "words": [
      {
       "en": "gravity",
@@ -23932,6 +24074,7 @@
     "key": "l09",
     "title": "Chemical Reactions",
     "titleHi": "रासायनिक अभिक्रियाएँ",
+    "level": 5,
     "words": [
      {
       "en": "reaction",
@@ -24111,6 +24254,7 @@
     "key": "l10",
     "title": "Metals & Non-metals",
     "titleHi": "धातु और अधातु",
+    "level": 5,
     "words": [
      {
       "en": "metal",
@@ -24300,6 +24444,7 @@
     "key": "l01",
     "title": "Inside a Computer",
     "titleHi": "कंप्यूटर के अंदर",
+    "level": 1,
     "words": [
      {
       "en": "mouse",
@@ -24384,6 +24529,7 @@
     "key": "l02",
     "title": "Using the Internet",
     "titleHi": "इंटरनेट का उपयोग",
+    "level": 1,
     "quiz": [
      {
       "q": "What do we use to open websites?",
@@ -24492,6 +24638,7 @@
     "key": "l03",
     "title": "Files, Folders & the System",
     "titleHi": "फ़ाइलें, फ़ोल्डर और सिस्टम",
+    "level": 2,
     "words": [
      {
       "en": "software",
@@ -24684,6 +24831,7 @@
     "key": "l04",
     "title": "Spreadsheets & Formulas",
     "titleHi": "स्प्रेडशीट और सूत्र",
+    "level": 2,
     "words": [
      {
       "en": "spreadsheet",
@@ -24811,6 +24959,7 @@
     "key": "l05",
     "title": "Algorithms & Programs",
     "titleHi": "कलनविधि और प्रोग्राम",
+    "level": 3,
     "words": [
      {
       "en": "algorithm",
@@ -24991,6 +25140,7 @@
     "key": "l06",
     "title": "Online Safety",
     "titleHi": "ऑनलाइन सुरक्षा",
+    "level": 3,
     "words": [
      {
       "en": "privacy",
@@ -25185,6 +25335,7 @@
     "key": "l07",
     "title": "Digital Payments & UPI",
     "titleHi": "डिजिटल भुगतान और यूपीआई",
+    "level": 4,
     "words": [
      {
       "en": "payment",
@@ -25367,6 +25518,7 @@
     "key": "l08",
     "title": "Government Services Online",
     "titleHi": "ऑनलाइन सरकारी सेवाएँ",
+    "level": 4,
     "words": [
      {
       "en": "Aadhaar",
@@ -25558,6 +25710,7 @@
     "key": "l09",
     "title": "Smart Machines & AI",
     "titleHi": "स्मार्ट मशीनें और एआई",
+    "level": 5,
     "words": [
      {
       "en": "AI",
@@ -25728,6 +25881,7 @@
     "key": "l10",
     "title": "Computers & Careers",
     "titleHi": "कंप्यूटर और करियर",
+    "level": 5,
     "words": [
      {
       "en": "career",
@@ -25869,6 +26023,7 @@
     "key": "body",
     "title": "My Body",
     "titleHi": "मेरा शरीर",
+    "level": 1,
     "words": [
      {
       "en": "eye",
@@ -26057,6 +26212,7 @@
     "key": "clinic",
     "title": "At the Clinic",
     "titleHi": "क्लिनिक में",
+    "level": 1,
     "words": [
      {
       "en": "doctor",
@@ -26254,6 +26410,7 @@
     "key": "illness",
     "title": "Common Illnesses",
     "titleHi": "आम बीमारियाँ",
+    "level": 1,
     "words": [
      {
       "en": "cough",
@@ -26449,6 +26606,7 @@
     "key": "medicine-shop",
     "title": "At the Medicine Shop",
     "titleHi": "दवाई की दुकान पर",
+    "level": 2,
     "words": [
      {
       "en": "tablet",
@@ -26639,6 +26797,7 @@
     "key": "healthy-habits",
     "title": "Healthy Habits",
     "titleHi": "सेहतमंद आदतें",
+    "level": 2,
     "words": [
      {
       "en": "exercise",
@@ -26867,6 +27026,7 @@
     "key": "mother-baby",
     "title": "Mother & Baby Care",
     "titleHi": "माँ और बच्चे की देखभाल",
+    "level": 3,
     "words": [
      {
       "en": "checkup",
@@ -27016,6 +27176,7 @@
     "key": "first-aid",
     "title": "First Aid & Emergency",
     "titleHi": "प्राथमिक उपचार",
+    "level": 3,
     "words": [
      {
       "en": "cut",
@@ -27189,6 +27350,7 @@
     "key": "eating-well",
     "title": "Eating Well",
     "titleHi": "अच्छा खानपान",
+    "level": 3,
     "words": [
      {
       "en": "dal",
@@ -27346,6 +27508,7 @@
     "key": "vaccination",
     "title": "Vaccination Day",
     "titleHi": "टीके का दिन",
+    "level": 4,
     "words": [
      {
       "en": "vaccine",
@@ -27508,6 +27671,7 @@
     "key": "clean-water",
     "title": "Safe Drinking Water",
     "titleHi": "पीने का साफ़ पानी",
+    "level": 4,
     "words": [
      {
       "en": "germ",
@@ -27704,6 +27868,7 @@
     "key": "mosquito",
     "title": "Mosquitoes & Malaria",
     "titleHi": "मच्छर और मलेरिया",
+    "level": 5,
     "words": [
      {
       "en": "mosquito",
@@ -27914,6 +28079,7 @@
     "key": "big-hospital",
     "title": "At the Big Hospital",
     "titleHi": "बड़े अस्पताल में",
+    "level": 5,
     "words": [
      {
       "en": "hospital",
@@ -28153,6 +28319,7 @@
     "key": "coins",
     "title": "Coins & Notes",
     "titleHi": "सिक्के और नोट",
+    "level": 1,
     "words": [
      {
       "en": "money",
@@ -28318,6 +28485,7 @@
     "key": "bank",
     "title": "At the Bank",
     "titleHi": "बैंक में",
+    "level": 1,
     "words": [
      {
       "en": "bank",
@@ -28574,6 +28742,7 @@
     "key": "saving",
     "title": "Saving Money",
     "titleHi": "पैसा बचाना",
+    "level": 1,
     "words": [
      {
       "en": "goal",
@@ -28754,6 +28923,7 @@
     "key": "atm",
     "title": "Using an ATM",
     "titleHi": "एटीएम इस्तेमाल करना",
+    "level": 2,
     "words": [
      {
       "en": "ATM",
@@ -28960,6 +29130,7 @@
     "key": "upi",
     "title": "Phone Payment",
     "titleHi": "फ़ोन से भुगतान",
+    "level": 2,
     "words": [
      {
       "en": "phone",
@@ -29131,6 +29302,7 @@
     "key": "bills",
     "title": "Paying Bills",
     "titleHi": "बिल भरना",
+    "level": 3,
     "words": [
      {
       "en": "bill",
@@ -29316,6 +29488,7 @@
     "key": "loan",
     "title": "Loans & Group Savings",
     "titleHi": "क़र्ज़ और समूह बचत",
+    "level": 3,
     "words": [
      {
       "en": "loan",
@@ -29479,6 +29652,7 @@
     "key": "safe-money",
     "title": "Keeping Money Safe",
     "titleHi": "पैसा सुरक्षित रखना",
+    "level": 3,
     "words": [
      {
       "en": "safe",
@@ -29703,6 +29877,7 @@
     "key": "budget",
     "title": "Making a Budget",
     "titleHi": "घर का बजट",
+    "level": 4,
     "words": [
      {
       "en": "budget",
@@ -29907,6 +30082,7 @@
     "key": "passbook",
     "title": "The Bank Passbook",
     "titleHi": "बैंक पासबुक",
+    "level": 4,
     "words": [
      {
       "en": "passbook",
@@ -30080,6 +30256,7 @@
     "key": "profit",
     "title": "Earning & Profit",
     "titleHi": "कमाई और मुनाफ़ा",
+    "level": 5,
     "words": [
      {
       "en": "earn",
@@ -30251,6 +30428,7 @@
     "key": "insurance",
     "title": "Insurance",
     "titleHi": "बीमा",
+    "level": 5,
     "words": [
      {
       "en": "insurance",
@@ -30461,6 +30639,7 @@
     "key": "around",
     "title": "Getting Around",
     "titleHi": "आना-जाना",
+    "level": 1,
     "words": [
      {
       "en": "bus",
@@ -30615,6 +30794,7 @@
     "key": "directions",
     "title": "Asking the Way",
     "titleHi": "रास्ता पूछना",
+    "level": 1,
     "words": [
      {
       "en": "left",
@@ -30829,6 +31009,7 @@
     "key": "bus-stand",
     "title": "At the Bus Stand",
     "titleHi": "बस अड्डे पर",
+    "level": 1,
     "words": [
      {
       "en": "stop",
@@ -31011,6 +31192,7 @@
     "key": "railway",
     "title": "At the Railway Station",
     "titleHi": "रेलवे स्टेशन पर",
+    "level": 2,
     "words": [
      {
       "en": "platform",
@@ -31208,6 +31390,7 @@
     "key": "auto-rickshaw",
     "title": "Auto and Rickshaw",
     "titleHi": "ऑटो और रिक्शा",
+    "level": 2,
     "words": [
      {
       "en": "auto",
@@ -31425,6 +31608,7 @@
     "key": "road-safety",
     "title": "Road Safety",
     "titleHi": "सड़क सुरक्षा",
+    "level": 3,
     "words": [
      {
       "en": "cross",
@@ -31631,6 +31815,7 @@
     "key": "landmarks",
     "title": "Places in Town",
     "titleHi": "शहर की जगहें",
+    "level": 3,
     "words": [
      {
       "en": "temple",
@@ -31802,6 +31987,7 @@
     "key": "trip-plan",
     "title": "Planning a Trip",
     "titleHi": "यात्रा की योजना",
+    "level": 3,
     "words": [
      {
       "en": "time",
@@ -31977,6 +32163,7 @@
     "key": "ticket-book",
     "title": "Booking a Ticket",
     "titleHi": "टिकट बुक करना",
+    "level": 4,
     "words": [
      {
       "en": "booking",
@@ -32163,6 +32350,7 @@
     "key": "packing",
     "title": "Packing for the Journey",
     "titleHi": "सफ़र का सामान",
+    "level": 4,
     "words": [
      {
       "en": "clothes",
@@ -32391,6 +32579,7 @@
     "key": "phone-map",
     "title": "Map on the Phone",
     "titleHi": "फ़ोन पर नक्शा",
+    "level": 5,
     "words": [
      {
       "en": "map",
@@ -32584,6 +32773,7 @@
     "key": "if-lost",
     "title": "If You Get Lost",
     "titleHi": "अगर रास्ता भटक जाओ",
+    "level": 5,
     "words": [
      {
       "en": "lost",
@@ -32810,6 +33000,7 @@
     "key": "l01",
     "title": "Your First Code",
     "titleHi": "तुम्हारा पहला कोड",
+    "level": 1,
     "words": [
      {
       "en": "code",
@@ -32991,6 +33182,7 @@
     "key": "l02",
     "title": "Variables",
     "titleHi": "वेरिएबल",
+    "level": 2,
     "words": [
      {
       "en": "variable",
@@ -33146,6 +33338,7 @@
     "key": "l03",
     "title": "Getting Input",
     "titleHi": "इनपुट लेना",
+    "level": 3,
     "words": [
      {
       "en": "input",
@@ -33291,6 +33484,7 @@
     "key": "l04",
     "title": "If and Else",
     "titleHi": "अगर और वरना",
+    "level": 4,
     "words": [
      {
       "en": "if",
@@ -33453,6 +33647,7 @@
     "key": "l05",
     "title": "Loops",
     "titleHi": "लूप",
+    "level": 5,
     "words": [
      {
       "en": "loop",
@@ -33576,6 +33771,7 @@
     "key": "l01",
     "title": "What is AI?",
     "titleHi": "AI क्या है?",
+    "level": 1,
     "words": [
      {
       "en": "AI",
@@ -33730,6 +33926,7 @@
     "key": "l02",
     "title": "Talking to AI",
     "titleHi": "AI से बात करना",
+    "level": 2,
     "words": [
      {
       "en": "prompt",
@@ -33902,6 +34099,7 @@
     "key": "l03",
     "title": "Using AI Safely",
     "titleHi": "AI सुरक्षित इस्तेमाल",
+    "level": 3,
     "words": [
      {
       "en": "safe",
@@ -34038,6 +34236,7 @@
     "key": "l04",
     "title": "AI in Daily Life",
     "titleHi": "रोज़ की ज़िंदगी में AI",
+    "level": 4,
     "words": [
      {
       "en": "voice",
@@ -34202,6 +34401,7 @@
     "key": "l01",
     "title": "Vowels (Swar)",
     "titleHi": "स्वर",
+    "level": 1,
     "quiz": [
      {
       "q": "Which one is a vowel (swar)?",
@@ -34377,6 +34577,7 @@
     "key": "l02",
     "title": "Consonants (Vyanjan)",
     "titleHi": "व्यंजन",
+    "level": 1,
     "quiz": [
      {
       "q": "Which one is a consonant (vyanjan)?",
@@ -34546,6 +34747,7 @@
     "key": "l03",
     "title": "Matras (Vowel signs)",
     "titleHi": "मात्राएँ",
+    "level": 1,
     "quiz": [
      {
       "q": "क + ा makes which sound?",
@@ -34728,6 +34930,7 @@
     "key": "l04",
     "title": "Two-letter Words",
     "titleHi": "दो अक्षर के शब्द",
+    "level": 2,
     "quiz": [
      {
       "q": "Which is a two-letter word?",
@@ -34855,6 +35058,7 @@
     "key": "l05",
     "title": "Colours & Things",
     "titleHi": "रंग और चीज़ें",
+    "level": 2,
     "quiz": [
      {
       "q": "What colour is the sky?",
@@ -35017,6 +35221,7 @@
     "key": "l06",
     "title": "Counting in Hindi",
     "titleHi": "हिंदी में गिनती",
+    "level": 3,
     "quiz": [
      {
       "q": "How do you write 3 in Hindi words?",
@@ -35158,6 +35363,7 @@
     "key": "l07",
     "title": "My Family",
     "titleHi": "मेरा परिवार",
+    "level": 3,
     "quiz": [
      {
       "q": "What do we call father in Hindi?",
@@ -35284,6 +35490,7 @@
     "key": "l08",
     "title": "A Little Story",
     "titleHi": "एक छोटी कहानी",
+    "level": 3,
     "read": [
      {
       "title": "The Thirsty Crow",
@@ -35431,6 +35638,7 @@
     "key": "l09",
     "title": "Three-letter Words",
     "titleHi": "तीन अक्षर के शब्द",
+    "level": 4,
     "quiz": [
      {
       "q": "Join the letters: क + म + ल. What word is made?",
@@ -35558,6 +35766,7 @@
     "key": "l10",
     "title": "Days of the Week",
     "titleHi": "सप्ताह के दिन",
+    "level": 4,
     "quiz": [
      {
       "q": "Which day comes after Somvar (Monday)?",
@@ -35696,6 +35905,7 @@
     "key": "l11",
     "title": "Opposite Words",
     "titleHi": "उलटे शब्द",
+    "level": 5,
     "quiz": [
      {
       "q": "What is the opposite of दिन (day)?",
@@ -35820,6 +36030,7 @@
     "key": "l12",
     "title": "Story Time",
     "titleHi": "कहानी का समय",
+    "level": 5,
     "read": [
      {
       "title": "The Clever Goat",
@@ -35949,6 +36160,7 @@
     "key": "l01",
     "title": "My Five Senses",
     "titleHi": "मेरी पाँच इंद्रियाँ",
+    "level": 1,
     "words": [
      {
       "en": "eye",
@@ -36080,6 +36292,7 @@
     "key": "l02",
     "title": "Living & Non-living",
     "titleHi": "सजीव और निर्जीव",
+    "level": 1,
     "words": [
      {
       "en": "plant",
@@ -36269,6 +36482,7 @@
     "key": "l03",
     "title": "Day & Night",
     "titleHi": "दिन और रात",
+    "level": 1,
     "words": [
      {
       "en": "sun",
@@ -36427,6 +36641,7 @@
     "key": "l04",
     "title": "Weather",
     "titleHi": "मौसम",
+    "level": 2,
     "words": [
      {
       "en": "rain",
@@ -36550,6 +36765,7 @@
     "key": "l05",
     "title": "Hot & Cold",
     "titleHi": "गरम और ठंडा",
+    "level": 2,
     "words": [
      {
       "en": "hot",
@@ -36705,6 +36921,7 @@
     "key": "l06",
     "title": "Float or Sink",
     "titleHi": "तैरना या डूबना",
+    "level": 3,
     "words": [
      {
       "en": "water",
@@ -36851,6 +37068,7 @@
     "key": "l07",
     "title": "Push & Pull",
     "titleHi": "धक्का और खिंचाव",
+    "level": 3,
     "words": [
      {
       "en": "push",
@@ -36966,6 +37184,7 @@
     "key": "l08",
     "title": "The Seasons",
     "titleHi": "ऋतुएँ",
+    "level": 3,
     "words": [
      {
       "en": "summer",
@@ -37145,6 +37364,7 @@
     "key": "l09",
     "title": "Plants Around Us",
     "titleHi": "हमारे आस-पास के पौधे",
+    "level": 4,
     "words": [
      {
       "en": "plant",
@@ -37293,6 +37513,7 @@
     "key": "l10",
     "title": "Air Around Us",
     "titleHi": "हमारे चारों ओर हवा",
+    "level": 4,
     "words": [
      {
       "en": "air",
@@ -37444,6 +37665,7 @@
     "key": "l11",
     "title": "Ice, Water, Steam",
     "titleHi": "बर्फ़, पानी, भाप",
+    "level": 5,
     "words": [
      {
       "en": "ice",
@@ -37622,6 +37844,7 @@
     "key": "l12",
     "title": "Light & Shadow",
     "titleHi": "रोशनी और छाया",
+    "level": 5,
     "words": [
      {
       "en": "light",
@@ -37812,6 +38035,7 @@
     "key": "l01",
     "title": "Nouns (Sangya)",
     "titleHi": "संज्ञा",
+    "level": 1,
     "quiz": [
      {
       "q": "Which word is a noun (naam)?",
@@ -37960,6 +38184,7 @@
     "key": "l02",
     "title": "Pronouns (Sarvanam)",
     "titleHi": "सर्वनाम",
+    "level": 1,
     "quiz": [
      {
       "q": "Which word is a pronoun (sarvanam)?",
@@ -38098,6 +38323,7 @@
     "key": "l03",
     "title": "Verbs (Kriya)",
     "titleHi": "क्रिया",
+    "level": 1,
     "quiz": [
      {
       "q": "Which word is a verb (kriya)?",
@@ -38219,6 +38445,7 @@
     "key": "l04",
     "title": "Adjectives (Visheshan)",
     "titleHi": "विशेषण",
+    "level": 2,
     "quiz": [
      {
       "q": "Which word is an adjective (visheshan)?",
@@ -38358,6 +38585,7 @@
     "key": "l05",
     "title": "Gender (Ling)",
     "titleHi": "लिंग",
+    "level": 2,
     "quiz": [
      {
       "q": "Which word is feminine (striling)?",
@@ -38488,6 +38716,7 @@
     "key": "l06",
     "title": "Number (Vachan)",
     "titleHi": "वचन",
+    "level": 3,
     "quiz": [
      {
       "q": "Plural (bahuvachan) of 'लड़का' is...",
@@ -38591,6 +38820,7 @@
     "key": "l07",
     "title": "Tense (Kaal)",
     "titleHi": "काल",
+    "level": 3,
     "quiz": [
      {
       "q": "'वह पढ़ रही है' is in which tense?",
@@ -38724,6 +38954,7 @@
     "key": "l08",
     "title": "Antonyms (Vilom)",
     "titleHi": "विलोम शब्द",
+    "level": 3,
     "quiz": [
      {
       "q": "Opposite (vilom) of 'दिन' is...",
@@ -38833,6 +39064,7 @@
     "key": "l09",
     "title": "Synonyms (Paryayvachi)",
     "titleHi": "पर्यायवाची शब्द",
+    "level": 4,
     "quiz": [
      {
       "q": "A synonym (paryayvachi) of 'पानी' is...",
@@ -38955,6 +39187,7 @@
     "key": "l10",
     "title": "Idioms (Muhavare)",
     "titleHi": "मुहावरे",
+    "level": 4,
     "quiz": [
      {
       "q": "'नौ दो ग्यारह होना' means...",
@@ -39073,6 +39306,7 @@
     "key": "l11",
     "title": "Punctuation (Viram Chinh)",
     "titleHi": "विराम चिह्न",
+    "level": 5,
     "quiz": [
      {
       "q": "Which mark ends a Hindi sentence?",
@@ -39200,6 +39434,7 @@
     "key": "l12",
     "title": "One Word (Anek ke liye Ek Shabd)",
     "titleHi": "अनेक शब्दों के लिए एक शब्द",
+    "level": 5,
     "quiz": [
      {
       "q": "One word for 'जो पढ़ना-लिखना जानता है'...",
@@ -39341,6 +39576,7 @@
     "key": "l01",
     "title": "Our Country India",
     "titleHi": "हमारा देश भारत",
+    "level": 1,
     "words": [
      {
       "en": "country",
@@ -39462,6 +39698,7 @@
     "key": "l02",
     "title": "States & Capitals",
     "titleHi": "राज्य और राजधानियाँ",
+    "level": 1,
     "words": [
      {
       "en": "state",
@@ -39631,6 +39868,7 @@
     "key": "l03",
     "title": "Rivers & Mountains",
     "titleHi": "नदियाँ और पर्वत",
+    "level": 1,
     "words": [
      {
       "en": "river",
@@ -39767,6 +40005,7 @@
     "key": "l04",
     "title": "Our Freedom Struggle",
     "titleHi": "हमारा स्वतंत्रता संग्राम",
+    "level": 2,
     "words": [
      {
       "en": "freedom",
@@ -39926,6 +40165,7 @@
     "key": "l05",
     "title": "Government & Democracy",
     "titleHi": "सरकार और लोकतंत्र",
+    "level": 2,
     "words": [
      {
       "en": "vote",
@@ -40051,6 +40291,7 @@
     "key": "l06",
     "title": "Constitution & Rights",
     "titleHi": "संविधान और अधिकार",
+    "level": 3,
     "words": [
      {
       "en": "constitution",
@@ -40234,6 +40475,7 @@
     "key": "l07",
     "title": "Maps & Directions",
     "titleHi": "मानचित्र और दिशाएँ",
+    "level": 3,
     "words": [
      {
       "en": "map",
@@ -40363,6 +40605,7 @@
     "key": "l08",
     "title": "The Earth in Space",
     "titleHi": "अंतरिक्ष में पृथ्वी",
+    "level": 3,
     "words": [
      {
       "en": "Earth",
@@ -40507,6 +40750,7 @@
     "key": "l09",
     "title": "Panchayat & Our Village",
     "titleHi": "पंचायत और हमारा गाँव",
+    "level": 4,
     "words": [
      {
       "en": "panchayat",
@@ -40698,6 +40942,7 @@
     "key": "l10",
     "title": "Seasons & Farming",
     "titleHi": "मौसम और खेती",
+    "level": 4,
     "words": [
      {
       "en": "season",
@@ -40882,6 +41127,7 @@
     "key": "l11",
     "title": "Our Neighbouring Countries",
     "titleHi": "हमारे पड़ोसी देश",
+    "level": 5,
     "words": [
      {
       "en": "neighbour",
@@ -41034,6 +41280,7 @@
     "key": "l12",
     "title": "Great Women of India",
     "titleHi": "भारत की महान महिलाएँ",
+    "level": 5,
     "words": [
      {
       "en": "brave",
@@ -41191,6 +41438,7 @@
     "key": "l01",
     "title": "What is a Computer",
     "titleHi": "कंप्यूटर क्या है",
+    "level": 1,
     "words": [
      {
       "en": "computer",
@@ -41305,6 +41553,7 @@
     "key": "l02",
     "title": "Parts of a Computer",
     "titleHi": "कंप्यूटर के भाग",
+    "level": 1,
     "words": [
      {
       "en": "monitor",
@@ -41474,6 +41723,7 @@
     "key": "l03",
     "title": "Input & Output",
     "titleHi": "इनपुट और आउटपुट",
+    "level": 1,
     "words": [
      {
       "en": "input",
@@ -41643,6 +41893,7 @@
     "key": "l04",
     "title": "Using the Keyboard",
     "titleHi": "कीबोर्ड का उपयोग",
+    "level": 2,
     "words": [
      {
       "en": "letter key",
@@ -41752,6 +42003,7 @@
     "key": "l05",
     "title": "Mouse & Desktop",
     "titleHi": "माउस और डेस्कटॉप",
+    "level": 2,
     "words": [
      {
       "en": "click",
@@ -41883,6 +42135,7 @@
     "key": "l06",
     "title": "Files & Folders",
     "titleHi": "फ़ाइलें और फ़ोल्डर",
+    "level": 3,
     "words": [
      {
       "en": "file",
@@ -42020,6 +42273,7 @@
     "key": "l07",
     "title": "Painting & Typing",
     "titleHi": "पेंट और टाइपिंग",
+    "level": 3,
     "words": [
      {
       "en": "document",
@@ -42129,6 +42383,7 @@
     "key": "l08",
     "title": "Staying Safe",
     "titleHi": "सुरक्षित रहना",
+    "level": 3,
     "words": [
      {
       "en": "password",
@@ -42297,6 +42552,7 @@
     "key": "l09",
     "title": "The Internet",
     "titleHi": "इंटरनेट",
+    "level": 4,
     "words": [
      {
       "en": "internet",
@@ -42475,6 +42731,7 @@
     "key": "l10",
     "title": "Sending an Email",
     "titleHi": "ईमेल भेजना",
+    "level": 4,
     "words": [
      {
       "en": "email",
@@ -42680,6 +42937,7 @@
     "key": "l11",
     "title": "Using a Mobile",
     "titleHi": "मोबाइल का उपयोग",
+    "level": 5,
     "words": [
      {
       "en": "mobile",
@@ -42837,6 +43095,7 @@
     "key": "l12",
     "title": "True or Fake?",
     "titleHi": "सच या झूठ?",
+    "level": 5,
     "words": [
      {
       "en": "news",
@@ -43016,6 +43275,7 @@
     "key": "l01",
     "title": "Sandhi (Joining sounds)",
     "titleHi": "संधि",
+    "level": 1,
     "quiz": [
      {
       "q": "विद्या + आलय = ?",
@@ -43119,6 +43379,7 @@
     "key": "l02",
     "title": "Samas (Compound words)",
     "titleHi": "समास",
+    "level": 1,
     "quiz": [
      {
       "q": "'राजपुत्र' (son of a king) is which samas?",
@@ -43244,6 +43505,7 @@
     "key": "l03",
     "title": "Alankar (Figures of speech)",
     "titleHi": "अलंकार",
+    "level": 1,
     "quiz": [
      {
       "q": "'चारु चंद्र की चंचल किरणें' — which alankar?",
@@ -43354,6 +43616,7 @@
     "key": "l04",
     "title": "Ras (Emotions in poetry)",
     "titleHi": "रस",
+    "level": 2,
     "quiz": [
      {
       "q": "Descriptions of bravery create which ras?",
@@ -43481,6 +43744,7 @@
     "key": "l05",
     "title": "Idioms (Muhavare)",
     "titleHi": "मुहावरे",
+    "level": 2,
     "quiz": [
      {
       "q": "'नाक में दम करना' means...",
@@ -43582,6 +43846,7 @@
     "key": "l06",
     "title": "Synonyms & Antonyms",
     "titleHi": "पर्यायवाची और विलोम",
+    "level": 3,
     "quiz": [
      {
       "q": "A synonym (paryayvachi) of 'पानी' is...",
@@ -43693,6 +43958,7 @@
     "key": "l07",
     "title": "Reading (Gadyansh)",
     "titleHi": "गद्यांश",
+    "level": 3,
     "read": [
      {
       "title": "A Girl Who Studied",
@@ -43794,6 +44060,7 @@
     "key": "l08",
     "title": "Correct the Sentence",
     "titleHi": "वाक्य शुद्धि",
+    "level": 3,
     "quiz": [
      {
       "q": "Which sentence is correct?",
@@ -43910,6 +44177,7 @@
     "key": "l09",
     "title": "Upsarg & Pratyay (Prefixes & Suffixes)",
     "titleHi": "उपसर्ग और प्रत्यय",
+    "level": 4,
     "quiz": [
      {
       "q": "Which upsarg (prefix) is in the word 'प्रगति'?",
@@ -44036,6 +44304,7 @@
     "key": "l10",
     "title": "One Word Substitution",
     "titleHi": "अनेक शब्दों के लिए एक शब्द",
+    "level": 4,
     "quiz": [
      {
       "q": "One word for 'one who never dies'?",
@@ -44154,6 +44423,7 @@
     "key": "l11",
     "title": "Proverbs (Lokoktiyan)",
     "titleHi": "लोकोक्तियाँ",
+    "level": 5,
     "quiz": [
      {
       "q": "What does 'अब पछताए होत क्या जब चिड़िया चुग गई खेत' mean?",
@@ -44260,6 +44530,7 @@
     "key": "l12",
     "title": "Punctuation (Viram Chinh)",
     "titleHi": "विराम चिह्न",
+    "level": 5,
     "quiz": [
      {
       "q": "Which mark is the 'purn viram' (full stop) in Hindi?",
@@ -44393,6 +44664,7 @@
     "key": "l01",
     "title": "Nationalism in India",
     "titleHi": "भारत में राष्ट्रवाद",
+    "level": 1,
     "words": [
      {
       "en": "nation",
@@ -44564,6 +44836,7 @@
     "key": "l02",
     "title": "The French Revolution",
     "titleHi": "फ़्रांसीसी क्रांति",
+    "level": 1,
     "words": [
      {
       "en": "revolution",
@@ -44714,6 +44987,7 @@
     "key": "l03",
     "title": "Resources & Development",
     "titleHi": "संसाधन और विकास",
+    "level": 1,
     "words": [
      {
       "en": "resource",
@@ -44887,6 +45161,7 @@
     "key": "l04",
     "title": "Agriculture in India",
     "titleHi": "भारत में कृषि",
+    "level": 2,
     "words": [
      {
       "en": "crop",
@@ -45057,6 +45332,7 @@
     "key": "l05",
     "title": "Democracy & Elections",
     "titleHi": "लोकतंत्र और चुनाव",
+    "level": 2,
     "words": [
      {
       "en": "democracy",
@@ -45241,6 +45517,7 @@
     "key": "l06",
     "title": "The Indian Constitution",
     "titleHi": "भारतीय संविधान",
+    "level": 3,
     "words": [
      {
       "en": "constitution",
@@ -45414,6 +45691,7 @@
     "key": "l07",
     "title": "Money & Credit",
     "titleHi": "मुद्रा और साख",
+    "level": 3,
     "words": [
      {
       "en": "currency",
@@ -45607,6 +45885,7 @@
     "key": "l08",
     "title": "Globalisation",
     "titleHi": "वैश्वीकरण",
+    "level": 3,
     "words": [
      {
       "en": "globalisation",
@@ -45771,6 +46050,7 @@
     "key": "l09",
     "title": "Local Self-Government",
     "titleHi": "पंचायती राज",
+    "level": 4,
     "words": [
      {
       "en": "panchayat",
@@ -45943,6 +46223,7 @@
     "key": "l10",
     "title": "Sectors of the Economy",
     "titleHi": "अर्थव्यवस्था के क्षेत्र",
+    "level": 4,
     "words": [
      {
       "en": "sector",
@@ -46147,6 +46428,7 @@
     "key": "l11",
     "title": "Water & Rivers",
     "titleHi": "जल और नदियाँ",
+    "level": 5,
     "words": [
      {
       "en": "flood",
@@ -46337,6 +46619,7 @@
     "key": "l12",
     "title": "Consumer Rights",
     "titleHi": "उपभोक्ता अधिकार",
+    "level": 5,
     "words": [
      {
       "en": "consumer",

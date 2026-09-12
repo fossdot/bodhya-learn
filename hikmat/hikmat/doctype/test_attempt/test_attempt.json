@@ -9,6 +9,7 @@
  "field_order": [
   "student",
   "track",
+  "level",
   "status",
   "score",
   "total",
@@ -18,6 +19,7 @@
   "duration_secs",
   "attempted_on",
   "paper",
+  "answers",
   "lang",
   "student_name",
   "cohort",
@@ -36,7 +38,15 @@
    "fieldname": "track",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Track key"
+   "label": "Track (legacy Module Test rows only)"
+  },
+  {
+   "fieldname": "level",
+   "fieldtype": "Int",
+   "label": "Level (1–5)",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "The level test this paper was for. Empty on rows from the retired per-track Module Tests."
   },
   {
    "fieldname": "status",
@@ -84,10 +94,16 @@
    "label": "Attempted on"
   },
   {
-   "description": "JSON array of Module Test Question row ids shown on this paper (overlap audits).",
+   "description": "JSON array of Test Question ids shown on this paper (no-repeat + overlap audits).",
    "fieldname": "paper",
    "fieldtype": "Small Text",
    "label": "Paper (question ids)"
+  },
+  {
+   "fieldname": "answers",
+   "fieldtype": "Small Text",
+   "label": "Answers (JSON)",
+   "description": "JSON object {question id: chosen text}. When every id resolves to a Test Question the server re-grades the paper from this and ignores the client's score."
   },
   {
    "fieldname": "lang",
@@ -116,7 +132,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-06 12:00:00.000000",
+ "modified": "2026-09-07 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Hikmat",
  "name": "Test Attempt",

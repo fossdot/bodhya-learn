@@ -12,10 +12,10 @@ from hikmat import setup_data as m
 
 
 def after_install():
-    # content: bands + subjects + the 14 tracks / 74 lessons / quiz + Hikmat Settings
+    # content: bands + subjects + every track / lesson (with L1–L5 levels) + the seed test bank
     m.seed_content()
 
-    # belts + campus/cohorts/invite-code/login-settings — patches DON'T run on a fresh
+    # test levels + campus/cohorts/invite-code/login-settings — patches DON'T run on a fresh
     # install (Frappe marks them completed), so everything they'd seed must happen here
     m.seed_operational_defaults()
 

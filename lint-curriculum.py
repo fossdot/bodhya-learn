@@ -43,6 +43,13 @@ def ladder(ls):
     return n - len(ls.get("skip") or [])
 
 
+def check_level(ls, path):
+    """Every lesson carries its L1–L5 rung (the level-test ladder gates on it)."""
+    lv = ls.get("level")
+    if not isinstance(lv, int) or not (1 <= lv <= 5):
+        err(path, f"level must be an integer 1–5 (got {lv!r})")
+
+
 def need(d, k, path):
     if not isinstance(d, dict) or not d.get(k):
         err(path, f"missing {k}")
@@ -177,6 +184,7 @@ def check_lesson(tk, ls):
             if sum(1 for o in opts if o.get("ok")) != 1: err(f"{p0}/form[{i}].fields[{j}]", "exactly one ok option")
     if ladder(ls) > 8:
         err(p0, f"ladder is {ladder(ls)} steps (>8) — trim types or add skip")
+    check_level(ls, p0)
 
 
 def main():

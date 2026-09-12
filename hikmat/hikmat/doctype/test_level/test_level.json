@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:L{level}",
+ "creation": "2026-09-07 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-07 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hikmat",
+ "name": "Test Level",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1,
+ "fields": [
+  {
+   "fieldname": "level",
+   "fieldtype": "Int",
+   "label": "Level number (1–5)",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title (e.g. Level 1)",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "title_hi",
+   "fieldtype": "Data",
+   "label": "Title (Hindi)"
+  },
+  {
+   "fieldname": "active",
+   "fieldtype": "Check",
+   "default": "1",
+   "label": "Active",
+   "description": "An inactive level never gates anything: its lessons open as soon as the previous level is passed."
+  },
+  {
+   "fieldname": "sec_rules",
+   "fieldtype": "Section Break",
+   "label": "When the test becomes due"
+  },
+  {
+   "fieldname": "stars_required",
+   "fieldtype": "Int",
+   "label": "Stars to unlock the test",
+   "default": "100",
+   "in_list_view": 1,
+   "description": "Stars earned on THIS level's lessons. Once reached, new lessons at this level pause until the test is passed; replays stay open."
+  },
+  {
+   "fieldname": "questions_per_paper",
+   "fieldtype": "Int",
+   "label": "Questions per paper",
+   "default": "20",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "pass_pct",
+   "fieldtype": "Int",
+   "label": "Pass mark (%)",
+   "default": "75",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sec_timer",
+   "fieldtype": "Section Break",
+   "label": "Seconds per question, by difficulty"
+  },
+  {
+   "fieldname": "easy_secs",
+   "fieldtype": "Int",
+   "label": "Easy",
+   "default": "20"
+  },
+  {
+   "fieldname": "medium_secs",
+   "fieldtype": "Int",
+   "label": "Medium",
+   "default": "30"
+  },
+  {
+   "fieldname": "hard_secs",
+   "fieldtype": "Int",
+   "label": "Hard",
+   "default": "45"
+  },
+  {
+   "fieldname": "sec_intro",
+   "fieldtype": "Section Break",
+   "label": "Intro shown before the test"
+  },
+  {
+   "fieldname": "intro",
+   "fieldtype": "Small Text",
+   "label": "Intro (English)"
+  },
+  {
+   "fieldname": "intro_hi",
+   "fieldtype": "Small Text",
+   "label": "Intro (Hindi)"
+  }
+ ],
+ "field_order": [
+  "level",
+  "title",
+  "title_hi",
+  "active",
+  "sec_rules",
+  "stars_required",
+  "questions_per_paper",
+  "pass_pct",
+  "sec_timer",
+  "easy_secs",
+  "medium_secs",
+  "hard_secs",
+  "sec_intro",
+  "intro",
+  "intro_hi"
+ ]
+}

@@ -188,6 +188,37 @@
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent;
     filter: drop-shadow(0 1px 0 #d98a00) drop-shadow(0 0 4px rgba(255,170,0,.65)); }
   .pill.coin { border-color:#ffd9c2; color:var(--primary-d); }
+  /* the L-pill: her rung on the ladder; pulses gently while her level test is due */
+  .pill.level { cursor:pointer; border-color:#d9c8ff; color:#4c1d95; font-weight:900; }
+  .pill.level.due { border-color:#7c3aed; background:#f3ecff; animation:lvpulse 1.6s ease-in-out infinite; }
+  .pill.level:active { transform:translateY(2px); }
+  [data-theme="dark"] .pill.level { color:#d9c8ff; border-color:#5b4a8a; }
+  [data-theme="dark"] .pill.level.due { background:#3a2d5c; border-color:#b794ff; }
+  @keyframes lvpulse { 50% { transform:scale(1.05); } }
+  @media (prefers-reduced-motion: reduce) { .pill.level.due { animation:none; } }
+  .lvtag { display:inline-block; font-size:11px; font-weight:900; letter-spacing:.03em; padding:1px 6px; border-radius:8px;
+           background:#ede9fe; color:#4c1d95; vertical-align:middle; }
+  [data-theme="dark"] .lvtag { background:#3a2d5c; color:#d9c8ff; }
+  .levelbar { height:10px; border-radius:999px; background:var(--line); overflow:hidden; max-width:320px; margin:12px auto 6px; }
+  .levelbar > div { height:100%; background:linear-gradient(90deg,#a78bfa,#7c3aed); border-radius:999px; transition:width .4s; }
+  .levellist { display:flex; flex-direction:column; gap:8px; margin:6px 0 10px; }
+  .levelrow { display:flex; align-items:center; gap:12px; padding:10px 12px; border:2px solid var(--line); border-radius:14px; background:var(--card); }
+  .levelrow.here { border-color:#7c3aed; }
+  .levelrow.done { opacity:.85; }
+  /* "Locked" is carried by the 🔒 in .lvright and a dimmed badge — NOT by fading the text.
+     A blanket opacity:.6 composited over --card put the row title and its sub-line under the
+     4.5:1 AA floor in both themes, and these rows are the only explanation a locked level gets. */
+  .levelrow.locked { border-style:dashed; }
+  .levelrow.skip .lvbadge { background:var(--line); color:var(--muted); }   /* gates nothing */
+  .levelrow.locked .lvbadge { opacity:.65; }
+  .levelrow.locked .lvright { opacity:.8; }
+  .levelrow .lvbadge { font-weight:900; font-size:14px; padding:4px 9px; border-radius:10px; background:#ede9fe; color:#4c1d95; min-width:38px; text-align:center; }
+  .levelrow.done .lvbadge { background:#d1fae5; color:#065f46; }
+  .levelrow .lvmain { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .levelrow .lvmain small { color:var(--muted); font-size:12.5px; }
+  .levelrow .lvright { font-weight:800; font-size:14px; white-space:nowrap; display:flex; align-items:center; gap:4px; }
+  [data-theme="dark"] .levelrow .lvbadge { background:#3a2d5c; color:#d9c8ff; }
+  [data-theme="dark"] .levelrow.done .lvbadge { background:#14532d; color:#bbf7d0; }
   /* the ☰ sits in the counters row, so it has to read as one of them: same pill shell, but a
      button, and wide enough to stay a 44px target on a phone (see the pointer:coarse rules) */
   .pill.menubtn { cursor:pointer; font-size:19px; line-height:1; padding:5px 14px;
@@ -635,10 +666,7 @@
   /* Legal footer on Home — Play requires a privacy-policy link and an in-app deletion route.
      Muted but AA-contrast on the page background; 44px tap targets for small fingers. */
 
-  /* "🙋 Help Needed" top-bar button + its confirmation toast */
-  .toggle.helpneed { background:var(--grape); color:#fff; border-color:var(--grape); font-weight:900; white-space:nowrap; }
-  .toggle.helpneed .iconsvg svg, .toggle.helpneed svg { filter:brightness(0) invert(1); vertical-align:middle; }
-  .toggle.helpneed:hover { filter:brightness(1.06); }
+  /* Confirmation toast (flashToast) — bottom-centred, never over the footer's primary action */
   #hkToast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:9999; background:#2c2440; color:#fff;
              border-radius:999px; padding:11px 18px; font-weight:800; font-size:14px; max-width:90%; text-align:center;
              box-shadow:0 6px 20px rgba(0,0,0,.25); transition:opacity .4s; }
@@ -1069,6 +1097,7 @@
       <div class="stats">
         <span class="pill star"><span class="staricon" id="starIcon">★</span> <span id="totalStars">0</span></span>
         <span class="pill coin"><span id="coinIcon">💎</span> <span id="coins">0</span></span>
+        <button class="pill level" id="levelPill" title="Level / स्तर" aria-haspopup="dialog">L1</button>
         <button class="pill menubtn" id="menuBtn" title="Menu / मेन्यू" aria-haspopup="dialog">☰</button>
       </div>
       <div class="utils">
@@ -1077,7 +1106,6 @@
           <button class="toggle" id="themeToggle" title="Light / dark">🌙</button>
           <button class="toggle" id="langToggle" title="Language / भाषा">EN</button>
         </div>
-        <button class="toggle helpneed" id="helpNeedBtn" title="Help Needed / मदद चाहिए">Help</button>
       </div>
     </div>
     <div id="root"></div>
@@ -1763,8 +1791,8 @@ const COACH = {
 // before it has given her a single reason to want one.
 //
 // This constant stays TRUE here. bundle-game.js rewrites it to false for the packaged build —
-// the same fail-loud `cut()` treatment that already makes Roshni AI, YouTube embeds and the
-// "Help Needed" button web-only. So "no accounts in this release" is provable by grepping the
+// the same fail-loud `cut()` treatment that already makes Roshni AI and YouTube embeds
+// web-only. So "no accounts in this release" is provable by grepping the
 // shipped bundle rather than by trusting a runtime check, and the web build is untouched.
 //
 // Nothing is deleted either way. Every screen — renderOnlineLogin, renderOnlineSignup,
@@ -1787,7 +1815,7 @@ let currentStudent = null;
 try { currentStudent = JSON.parse(localStorage.getItem("hikmat_current")) || null; } catch(e){}
 function stateKeyFor(id){ return "hikmat_state_" + (id || "guest"); }
 function stateKey(){ return stateKeyFor(currentStudent && currentStudent.id); }
-function fresh(){ return { progress:{}, coins:0, hindi:false, lang:"en", sound:true, testSeen:{}, testPassed:{}, videosSeen:{}, seenTypes:{} }; }
+function fresh(){ return { progress:{}, coins:0, hindi:false, lang:"en", sound:true, testSeen:{}, levelTests:{}, videosSeen:{}, seenTypes:{} }; }
 function loadState(){
   let st;
   try { st = JSON.parse(localStorage.getItem(stateKey())) || fresh(); }
@@ -1808,7 +1836,10 @@ function loadState(){
   }
   return st;
 }
-function save(){ localStorage.setItem(stateKey(), JSON.stringify(state)); }
+// Declared here, ABOVE its first caller: save() drops this cache, and a `let` further down the
+// file would leave it in the temporal dead zone for any save() during boot.
+let _lvCache = {};        // per-level rollup memo — see dropLevelCache / levelStars / levelPool
+function save(){ dropLevelCache(); localStorage.setItem(stateKey(), JSON.stringify(state)); }
 
 // Fold one saved state into another, taking the BETTER of each value — never the newer one.
 // Stars and gems only ever go up in this game, and a merge that could lower either would be a
@@ -1823,13 +1854,13 @@ function mergeSavedState(into, from){
     into.progress[ck][lk][aid] = Math.max(into.progress[ck][lk][aid] || 0, p[ck][lk][aid] || 0);
   }
   into.coins = Math.max(into.coins || 0, from.coins || 0);
-  into.testPassed = into.testPassed || {};
-  const tp = from.testPassed || {};
-  for(const tk in tp){
-    const a = into.testPassed[tk] || { passed:false, bestPct:0, attempts:0 }, b = tp[tk] || {};
-    into.testPassed[tk] = { passed: !!(a.passed || b.passed),
-                            bestPct: Math.max(a.bestPct || 0, b.bestPct || 0),
-                            attempts: (a.attempts || 0) + (b.attempts || 0) };
+  into.levelTests = into.levelTests || {};
+  const tp = from.levelTests || {};
+  for(const n in tp){
+    const a = into.levelTests[n] || { passed:false, bestPct:0, attempts:0 }, b = tp[n] || {};
+    into.levelTests[n] = { passed: !!(a.passed || b.passed),
+                           bestPct: Math.max(a.bestPct || 0, b.bestPct || 0),
+                           attempts: (a.attempts || 0) + (b.attempts || 0) };
   }
   // The seen-question lists are what stop a retake serving the same paper twice, so they union
   // rather than replace — dropping either side would hand her questions she has already answered.
@@ -1910,60 +1941,166 @@ function lessonMax(lesson){ return levelsFor(lesson).length * 3; }              
 function trackEarned(ck){ const c=(state.progress||{})[ck]||{}; let t=0; for(const l in c) t+=lessonEarned(ck,l); return t; }
 function totalStars(){ let t=0; const p=state.progress||{}; for(const c in p) t+=trackEarned(c); return t; }
 
-// ---------- Module tests: per-student question-bank bookkeeping ----------
-// state.testSeen[trackKey]  = [questionId, ...] ordered by FIRST exposure (an LRU list:
-//                             re-served ids move to the back, so repeats are maximally spaced)
-// state.testPassed[trackKey] = { passed, bestPct, attempts }
+// ---------- Level tests (L1–L5): the ladder every lesson hangs on ----------
+// Every lesson carries `level` 1–5 (Desk-set; else the same position-in-track default the
+// server uses). A learner sees lessons up to her current level = the first level whose test
+// she has not passed. Once she has earned that level's star quota, NEW lessons at the level
+// pause until she passes its test; replays never lock. In code this is "level"; the game's
+// ACTIVITY steps are also called levels (levelsFor / startLevel) — do not confuse the two.
+//
+// state.levelTests[n] = { passed, bestPct, attempts }     (n = 1..5, as a string key in JSON)
+// state.testSeen["L"+n] = [questionId, ...] ordered by FIRST exposure (an LRU list: re-served
+//                          ids move to the back, so repeats are maximally spaced)
 // (Writers must guard with `state.testSeen = state.testSeen || {}` — states saved before
 // this feature existed load without these keys.)
-function testPassedFor(ck){ const t = (state.testPassed||{})[ck]; return !!(t && t.passed); }
-// Tracks in the same (band, subject) group — Life Skills (no band) is its own group —
-// form a chain in COURSES order; used for "pass the test to open the next module".
-function trackGroup(course){
-  return COURSES.filter(c => (c.band||"")===(course.band||"") &&
-                             (c.subject||"")===(course.subject||"") &&
-                             c.published && c.lessons.length);
+let LEVEL_BANK = { levels: [], bank: [] };   // get_test_bank / testbank.json — see loadTestBank()
+const TESTBANK_KEY = "hikmat_testbank_cache";
+const MIN_PAPER = 5;                          // fewer learned questions than this → the test can't run yet
+function levelDefaults(n){ return { level:n, title:"Level "+n, titleHi:"स्तर "+n, active:true, starsRequired:100,
+                                    questionsPerPaper:20, passPct:75, secs:{easy:20, medium:30, hard:45}, intro:"", introHi:"" }; }
+function levelRules(n){ return (LEVEL_BANK.levels||[]).find(l => l.level===n) || levelDefaults(n); }
+function levelTitle(n){ const r = levelRules(n); return tx(r.title || ("Level "+n), r.titleHi || r.title || ("स्तर "+n)); }
+function defaultLevel(i, n){ return Math.min(5, 1 + Math.floor(Math.max(0,i) * 5 / Math.max(1,n))); }
+function lessonLevel(course, ls){
+  const v = ls.level|0; if(v >= 1 && v <= 5) return v;
+  const i = course.lessons.indexOf(ls); return defaultLevel(i < 0 ? 0 : i, course.lessons.length);
 }
-function nextTrackInGroup(course){
-  const g = trackGroup(course), i = g.findIndex(c => c.key===course.key);
-  return i>=0 ? (g[i+1] || null) : null;
+function levelPassed(n){ const t = (state.levelTests||{})[n]; return !!(t && t.passed); }
+// A rung she can NEVER clear must not be allowed to stop the ladder, or every level above it
+// stays shut for the life of the install. Two shapes: a level an admin switched off in Desk
+// (Test Level.active = 0 — whose own field help promises "an inactive level never gates
+// anything"), and a level whose test could never be drawn at all (no bank rows and no lesson
+// quiz items anywhere at that level — the standalone / no-curriculum build). Both count as
+// already cleared, so studentLevel() walks PAST them.
+// This asks what the level COULD ever ask (levelTestReachable), never what it can ask right now
+// (levelTestAvailable): the latter counts only lessons she has PLAYED, so gating on it would
+// unlock the whole ladder for a brand-new learner and re-lock it after her first lesson.
+function levelCleared(n){
+  if(levelPassed(n)) return true;
+  if(levelRules(n).active === false) return true;
+  return !levelTestReachable(n);
 }
-// The earlier track whose unpassed test blocks `course` (null = nothing blocks).
-// Tracks without an active test never block; stale caches without `test` are fail-open.
-function prevTestBlocker(course){
-  const g = trackGroup(course), i = g.findIndex(c => c.key===course.key);
-  if(i <= 0) return null;
-  const prev = g[i-1];
-  return (prev.test && prev.test.bank && prev.test.bank.length && !testPassedFor(prev.key)) ? prev : null;
+// 1..5 = the level she is working at; 6 = every rung cleared (the ladder is complete)
+function studentLevel(){ for(let n=1; n<=5; n++){ if(!levelCleared(n)) return n; } return 6; }
+function shownLevel(){ return Math.min(5, studentLevel()); }
+function eachLevelLesson(n, fn){
+  COURSES.forEach(c => { if(!c.published) return; c.lessons.forEach(ls => { if(lessonLevel(c, ls)===n) fn(c, ls); }); });
+}
+// A phone renders the whole home grid by asking lessonLock() about EVERY lesson of every track,
+// and each of those questions wants this level's star total and question pool. Computing them
+// per lesson is a 283 × bank-size sweep on a cheap phone, so they are memoised and the cache is
+// dropped whenever anything they depend on changes: save() (stars, level passes) and a new bank.
+function dropLevelCache(){ _lvCache = {}; }
+function _lvMemo(key, fn){ return (key in _lvCache) ? _lvCache[key] : (_lvCache[key] = fn()); }
+function levelStars(n){ return _lvMemo("s"+n, () => { let t=0; eachLevelLesson(n, (c, ls) => { t += lessonEarned(c.key, ls.key); }); return t; }); }
+function levelMaxStars(n){ return _lvMemo("m"+n, () => { let t=0; eachLevelLesson(n, (c, ls) => { t += lessonMax(ls); }); return t; }); }
+function levelLessonsPlayed(n){ let t=0; eachLevelLesson(n, (c, ls) => { if(lessonEarned(c.key, ls.key) > 0) t++; }); return t; }
+// The questions this learner can be asked at level n: the bank rows of lessons SHE HAS PLAYED
+// at that level, plus those lessons' own quiz items (ids "quiz:track/lesson/i" — the server
+// grades only ids it issued and trusts the rest). Bank rows sort first so the paper prefers them.
+function levelPool(n){ return _lvMemo("p"+n, () => _buildLevelPool(n)); }
+function _buildLevelPool(n){
+  // Which (track, lesson) pairs sit at level n AND she has played. Membership is decided by the
+  // LESSON's level, never by the level a bank row was written with — a lesson moved to another
+  // level in Desk must move its questions with it, even against a cached bank.
+  const played = new Set();
+  eachLevelLesson(n, (c, ls) => { if(lessonEarned(c.key, ls.key) > 0) played.add(c.key + "/" + ls.key); });
+  const pool = (LEVEL_BANK.bank||[]).filter(q => played.has(q.t + "/" + q.l) &&
+                                                 Array.isArray(q.choices) && q.choices.includes(q.answer))
+                                    .map(q => ({ ...q, level:n, bank:true }));
+  eachLevelLesson(n, (c, ls) => {
+    if(!played.has(c.key + "/" + ls.key)) return;
+    (ls.quiz||[]).forEach((q, i) => {
+      if(!Array.isArray(q.choices) || !q.choices.includes(q.answer)) return;
+      pool.push({ id:"quiz:"+c.key+"/"+ls.key+"/"+i, t:c.key, l:ls.key, level:n, d:"m", bank:false,
+                  q:q.q, qHi:q.qHi||"", emoji:q.emoji||"", choices:q.choices, answer:q.answer });
+    });
+  });
+  return pool;
+}
+function levelTestAvailable(n){ return levelPool(n).length >= MIN_PAPER; }
+// The CEILING of levelPool(n): every question level n could ever ask if she played all of it.
+// Play-independent by design — it answers "can this rung ever be tested?" for levelCleared().
+function levelTestReachable(n){ return _lvMemo("r"+n, () => {
+  const at = new Set(); let t = 0;
+  const usable = q => Array.isArray(q.choices) && q.choices.includes(q.answer);
+  eachLevelLesson(n, (c, ls) => {
+    at.add(c.key + "/" + ls.key);
+    t += (ls.quiz||[]).filter(usable).length;
+  });
+  t += (LEVEL_BANK.bank||[]).filter(q => at.has(q.t + "/" + q.l) && usable(q)).length;
+  return t >= MIN_PAPER;
+}); }
+// "Due" = the pause is on: quota reached, not yet passed, and there is something to ask.
+function levelTestDue(n){
+  if(n < 1 || n > 5 || levelPassed(n)) return false;
+  const r = levelRules(n); if(r.active === false) return false;
+  return levelStars(n) >= (r.starsRequired || 100) && levelTestAvailable(n);
+}
+// Why a lesson is closed, or null. {kind:"level"} = above her level; {kind:"test"} = a NEW
+// lesson at her level while its test is due. Anything she has already played stays open.
+function lessonLock(course, ls){
+  if(lessonEarned(course.key, ls.key) > 0) return null;
+  const lv = lessonLevel(course, ls), cur = studentLevel();
+  if(lv > cur) return { kind:"level", level: lv, need: cur };
+  if(lv === cur && levelTestDue(cur)) return { kind:"test", level: cur };
+  return null;
+}
+function lockText(lock){
+  if(!lock) return "";
+  return lock.kind === "test"
+    ? tx("Take your "+levelTitle(lock.level)+" test first", "पहले अपनी "+levelTitle(lock.level)+" परीक्षा दो")
+    : tx("Opens at "+levelTitle(lock.level), levelTitle(lock.level)+" पर खुलेगा");
 }
 // Burn served question ids into the seen-list (LRU move-to-back). Voided papers burn
 // too — she saw those questions — which keeps this list identical to the server's
 // union-of-papers, so devices converge.
-function burnPaper(ck, ids){
+function burnPaper(key, ids){
   state.testSeen = state.testSeen || {};
-  const list = state.testSeen[ck] = state.testSeen[ck] || [];
+  const list = state.testSeen[key] = state.testSeen[key] || [];
   ids.forEach(id => { const i = list.indexOf(id); if(i >= 0) list.splice(i, 1); list.push(id); });
 }
-// Draw a fresh paper: random n questions the student has NOT seen, falling back to the
-// longest-ago-seen ones when the bank is nearly exhausted (no reset, no facilitator step).
-// Random sampling from a bank ≥10× the paper keeps two students' expected overlap ≤10%
-// (enforced softly by Desk validation on Module Test). Question order and choice order
-// are shuffled per paper and then FROZEN, so a language toggle can't reshuffle mid-test.
-function buildPaper(course){
-  const t = course.test;
-  const n = Math.min(t.bank.length, Math.max(1, t.questionsPerPaper || 10));
-  const seenArr = ((state.testSeen||{})[course.key]) || [];
+// Draw a fresh paper for level n: random questions the student has NOT seen (bank rows
+// first), falling back to the longest-ago-seen ones when her pool is nearly exhausted (no
+// reset, no facilitator step). Random sampling from a pool ≥10× the paper keeps two students'
+// expected overlap ≤10%. Question order and choice order are shuffled per paper and then
+// FROZEN, so a language toggle can't reshuffle mid-test.
+function buildPaper(n){
+  const pool = levelPool(n), r = levelRules(n);
+  const want = Math.min(pool.length, Math.max(1, r.questionsPerPaper || 20));
+  const seenArr = ((state.testSeen||{})["L"+n]) || [];
   const seenSet = new Set(seenArr);
-  const unseen = t.bank.filter(q => !seenSet.has(q.id));
+  const unseen = pool.filter(q => !seenSet.has(q.id));
+  const bankFirst = shuffle(unseen.filter(q => q.bank)).concat(shuffle(unseen.filter(q => !q.bank)));
   let picked;
-  if(unseen.length >= n) picked = shuffle(unseen).slice(0, n);
+  if(bankFirst.length >= want) picked = bankFirst.slice(0, want);
   else {
-    const byId = {}; t.bank.forEach(q => byId[q.id] = q);
-    const reuse = seenArr.map(id => byId[id]).filter(Boolean).slice(0, n - unseen.length);
-    picked = unseen.concat(reuse);
+    const byId = {}; pool.forEach(q => byId[q.id] = q);
+    const reuse = seenArr.map(id => byId[id]).filter(Boolean).slice(0, want - bankFirst.length);
+    picked = bankFirst.concat(reuse);
   }
   const qs = shuffle(picked).map(q => ({ ...q, choices: shuffle(q.choices) }));
-  return { clientId: uid(), qs, reused: unseen.length < n };
+  return { clientId: uid(), qs, reused: bankFirst.length < want };
+}
+function qSecs(q, n){ const r = levelRules(n).secs || {}; return q.d==="e" ? (r.easy||20) : q.d==="h" ? (r.hard||45) : (r.medium||30); }
+// The bank follows the curriculum's own three-layer contract: localStorage cache → the
+// SW-precached static file → the live API. Each layer overwrites the previous only when it
+// returns something, so going offline never loses the bank; and no layer is required — with
+// none of them the tests still run on the lessons' own quiz items (levelPool).
+function applyTestBank(b){ if(b && Array.isArray(b.bank) && Array.isArray(b.levels) && (b.bank.length || b.levels.length)){ LEVEL_BANK = { levels: b.levels, bank: b.bank }; dropLevelCache(); return true; } return false; }
+async function loadTestBank(){
+  let have = false;
+  try { have = applyTestBank(JSON.parse(localStorage.getItem(TESTBANK_KEY))); } catch(e){}
+  if(!have){
+    try { const r = await fetch("/assets/hikmat/testbank.json", {headers:{Accept:"application/json"}});
+          if(r.ok) have = applyTestBank(await r.json()); } catch(e){}
+  }
+  try {
+    const r = await apiFetch(apiURL("get_test_bank"), {headers:{Accept:"application/json"}});
+    if(r.ok){ const j = (await r.json()).message;
+              if(applyTestBank(j)){ try { localStorage.setItem(TESTBANK_KEY, JSON.stringify(j)); } catch(e){} } }
+  } catch(e){}
+  if(typeof refreshTop === "function") refreshTop();
 }
 
 // ---------- Native-TTS bridge for the packaged Android app ----------
@@ -2719,6 +2856,18 @@ function armBack(){
   // at home; a re-entrant navigation costs correctness.
 }
 // The single place that decides what a back press means, whichever shell delivered it.
+// A running test owns navigation. The top bar lives OUTSIDE #root, so it survives every
+// render: without this she can tap the wordmark (which sits exactly where the back button sits
+// on every other screen, because startTest calls setBack(null)), the L-pill or the ☰ menu and
+// walk out of a proctored paper WITHOUT voiding it, while the per-question clock keeps burning
+// it down in the background and later re-mounts the test over whatever she opened. Every nav
+// affordance funnels through here and gets the same spoken refusal the hardware back gives.
+function testOwnsNav(){
+  if(typeof TEST === "undefined" || !TEST || TEST.done) return false;
+  const m = tx("The test is running. Tap ✋ Stop the test to leave.","परीक्षा चल रही है। बाहर जाने के लिए ✋ परीक्षा रोको दबाओ।");
+  srSay(m); speak(m, state.lang === "hi" ? "hi" : "en");
+  return true;
+}
 function hkBack(){
   // 1. A dialog is on top (doubt sheet, Roshni panel, the exit question): back closes the
   //    dialog and does NOT navigate the screen underneath. Prefer the sheet's own close
@@ -2730,14 +2879,11 @@ function hkBack(){
     if(cb) cb.click(); else sheet.remove();
     return;
   }
-  // 2. A running module test owns the back button. setBack(null) leaves _backFn empty there,
+  // 2. A running level test owns the back button. setBack(null) leaves _backFn empty there,
   //    so without this branch the press was swallowed SILENTLY — which voids the test via
   //    pagehide with no warning a non-reader could perceive. The ✋ Stop button is the only exit.
-  if(typeof TEST !== "undefined" && TEST && !TEST.done){
-    const m = tx("The test is running. Tap ✋ Stop the test to leave.","परीक्षा चल रही है। बाहर जाने के लिए ✋ परीक्षा रोको दबाओ।");
-    srSay(m); speak(m, state.lang === "hi" ? "hi" : "en");
-    return;
-  }
+  //    testOwnsNav() speaks the refusal and is shared with the wordmark, L-pill and ☰ menu.
+  if(testOwnsNav()) return;
   // 3. One step toward home — the same handler the on-screen back button runs.
   if(_backFn){ sfx.back(); _backFn(); return; }
   // 4. Already home.
@@ -2907,8 +3053,14 @@ function refreshTop(){
   }
   $("#totalStars").textContent = fmtCount(totalStars());
   $("#coins").textContent = fmtCount(state.coins);
-  const hn = $("#helpNeedBtn");
-  if(hn){ hn.innerHTML = iconFor("help","🙋") + " " + esc(tx("Help","मदद")); hn.title = tx("Help Needed","मदद चाहिए"); hn.setAttribute("aria-label", tx("Help Needed","मदद चाहिए")); }
+  const lp = $("#levelPill");
+  if(lp){
+    const n = shownLevel(), due = studentLevel() <= 5 && levelTestDue(n);
+    lp.textContent = (studentLevel() > 5 ? "L5 ✓" : "L" + n) + (due ? " 🏆" : "");
+    lp.classList.toggle("due", due);
+    lp.setAttribute("aria-label", due ? tx(levelTitle(n)+" — test ready", levelTitle(n)+" — परीक्षा तैयार") : levelTitle(n));
+    lp.title = lp.getAttribute("aria-label");
+  }
   const lt = $("#langToggle");
   if(lt){ lt.classList.toggle("on", state.lang==="hi"); lt.textContent = (state.lang==="hi" ? "हिं" : "EN"); }
   mountRoshniFab();   // floating Roshni voice assistant — appears once AI is on + a student is logged in
@@ -2963,14 +3115,14 @@ $("#hearBtn").onclick = () => {
   }
   logTool("sound_toggle");
 };
-$("#helpNeedBtn").onclick = () => helpNeeded();
-$("#menuBtn").onclick = () => openMenu();
+$("#menuBtn").onclick = () => { if(testOwnsNav()) return; openMenu(); };
+$("#levelPill").onclick = () => { if(testOwnsNav()) return; openLevelSheet(); };
 // Tapping the wordmark goes Home — the one thing every app trains you to expect, and the only
 // way back from a screen that shows the brand instead of a back button (the login screen).
 (function(){
   const bw = document.getElementById("brandWrap");
   if(!bw) return;
-  const go = () => { sfx.back(); renderHome(); };
+  const go = () => { if(testOwnsNav()) return; sfx.back(); renderHome(); };
   bw.onclick = go;
   bw.onkeydown = (e) => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } };
 })();
@@ -3139,7 +3291,7 @@ function openMenu(){
   sheet.querySelector("[data-x]").onclick = closeMenu;
   // The way back to the three doors from ANY screen — now that launching continues her last
   // lesson, the picker is somewhere she chooses to go, not something she passes through.
-  sheet.querySelector("#mHow").onclick = () => { sfx.enter(); close(); renderModeHome(); };
+  sheet.querySelector("#mHow").onclick = () => { if(testOwnsNav()) return; sfx.enter(); close(); renderModeHome(); };
   sheet.querySelector("#mFriend").onclick = () => { close(); openMascotPicker(); };
   sheet.querySelector("#mGender").onclick = () => { close(); openGenderPicker(); };
   sheet.querySelector("#mSound").onclick = () => { close(); document.getElementById("hearBtn").click(); };
@@ -3289,6 +3441,21 @@ function openGenderPicker(){
 // ---- Class 1–10 grouping helpers ----
 const trackMax = c => c.lessons.reduce((a,ls)=>a+lessonMax(ls),0);
 const bandTracks = bk => COURSES.filter(c => c.band===bk);                 // tracks tagged to a grade band
+// Education stages a learner can declare at sign-up BEYOND the three content bands (Vishal,
+// 2026-09-07: the girls are Class-12 and college students too). They are self-description
+// only — the server stores them as unpublished Grade Bands — and play the 9–10 content.
+const EXTRA_CLASSES = [
+  { key:"11-12", title:"Class 11–12",      titleHi:"कक्षा 11–12",          icon:"📘", contentBand:"9-10" },
+  { key:"ug",    title:"Bachelor's degree", titleHi:"स्नातक (Bachelor's)",  icon:"🎓", contentBand:"9-10" },
+  { key:"pg",    title:"Master's degree",   titleHi:"परास्नातक (Master's)", icon:"🏅", contentBand:"9-10" },
+];
+// The class picker's options: the content bands that actually have lessons, then the stages.
+function classOptions(){
+  const bands = BANDS.filter(b => bandTracks(b.key).some(c => c.published && c.lessons.length));
+  return bands.concat(EXTRA_CLASSES.filter(x => !bands.some(b => b.key === x.key)));
+}
+// Which CONTENT band a declared class maps to (a college student sees the 9–10 group).
+function contentBandFor(key){ const x = EXTRA_CLASSES.find(e => e.key === key); return x ? x.contentBand : (key || ""); }
 const lifeSkillsTracks = () => COURSES.filter(c => !c.band);               // the original thematic tracks
 function subjectsInBand(bk){
   const present = new Set(bandTracks(bk).filter(c=>c.published && c.lessons.length).map(c=>c.subject));
@@ -3302,23 +3469,20 @@ function progressOf(tracks){
 function trackCard(course, back){
   const earned = trackEarned(course.key), maxStars = trackMax(course);
   const locked = !course.published || course.lessons.length===0;
-  // module-test chain: a NEVER-played track stays behind the previous track's test;
-  // anything already started remains fully accessible (soft lock)
-  const blocker = (!locked && earned===0) ? prevTestBlocker(course) : null;
+  // level ladder: a track whose EVERY lesson is closed to her shows the lock, but stays
+  // tappable — the trail explains exactly what opens it (soft lock, see lessonLock)
+  const allShut = !locked && course.lessons.every(ls => lessonLock(course, ls));
+  const firstLock = allShut ? lessonLock(course, course.lessons[0]) : null;
   const node = el(`<button class="theme ${locked?"locked":""}" ${locked?"disabled":""}
       style="${locked?"":`--tc:${col(course.color)};background:${col(course.color)}14;border-color:${col(course.color)}55`}">
-    ${locked ? `<span class="lock">🔒</span>` : (blocker ? `<span class="lock">🔒</span>` : "")}
+    ${locked || allShut ? `<span class="lock">🔒</span>` : ""}
     <div class="big">${iconFor(["track:"+course.key, "subject:"+course.subject], course.icon)}</div>
     <h3>${esc(tx(course.title, course.titleHi))}</h3>
     <small>${locked ? tx("Coming soon","जल्द आ रहा है")
-                    : (blocker ? esc(tx("Pass the "+blocker.title+" test first","पहले "+(blocker.titleHi||blocker.title)+" की परीक्षा पास करो"))
+                    : (allShut ? esc(lockText(firstLock))
                     : (earned>0 ? `<span class="staricon">★</span> ${earned}/${maxStars}` : esc(tx(course.blurb, course.blurbHi))))}</small>
   </button>`);
-  if(!locked) node.onclick = () => {
-    const b = trackEarned(course.key)===0 ? prevTestBlocker(course) : null;
-    if(b){ sfx.locked(); renderTestWall(b, course, back); return; }
-    sfx.enter(); renderTrack(course, back);
-  };
+  if(!locked) node.onclick = () => { sfx.enter(); renderTrack(course, back); };
   return node;
 }
 // A grade-band card (1–4 / 5–8 / 9–10) → opens the subject grid. null if the band has no content.
@@ -3361,6 +3525,60 @@ function subjectCard(band, subj){
 // Deleting is deliberately two taps and never the resting state of the sheet: the button
 // arms first and only the second, differently-worded tap actually erases. Settings survive —
 // wiping her stars must not also switch her back to English or take her friend away.
+// The ladder at a glance: which levels are passed, where she is, how far to her next test,
+// and the one button that matters when the test is due. Opened from the L-pill in the top bar.
+function openLevelSheet(){
+  const _ex = document.getElementById("lvlWrap"); if(_ex) _ex.remove();
+  sfx.tap(); stopSpeech();
+  const cur = studentLevel();
+  const title = tx("Your level","तुम्हारा स्तर");
+  const body = cur > 5
+    ? tx("You have passed every level test. Shabash!","तुमने हर स्तर की परीक्षा पास कर ली। शाबाश!")
+    : tx("Collect stars on "+levelTitle(cur)+" lessons, then pass the "+levelTitle(cur)+" test to open the next level.",
+         levelTitle(cur)+" के पाठों पर सितारे जमा करो, फिर "+levelTitle(cur)+" की परीक्षा पास करो और अगला स्तर खोलो।");
+  const rows = [1,2,3,4,5].map(n => {
+    const r = levelRules(n), have = levelStars(n), need = r.starsRequired || 100, rec = (state.levelTests||{})[n];
+    const passed = levelPassed(n), here = n === cur, due = here && levelTestDue(n);
+    // A rung the ladder walks past without a pass (switched off in Desk, or no questions can
+    // ever be drawn for it) is not locked and not passed — saying "🔒 Pass Level n-1 first"
+    // about a level that gates nothing is what made this sheet read as self-contradicting.
+    const skipped = !passed && !here && levelCleared(n);
+    const state_ = passed ? "done" : here ? "here" : skipped ? "skip" : "locked";
+    const right = passed ? `✓ ${esc(tx("Passed"+(rec && rec.bestPct ? " · "+rec.bestPct+"%" : ""), "पास"+(rec && rec.bestPct ? " · "+rec.bestPct+"%" : "")))}`
+                : here    ? `<span class="staricon">★</span> ${have} / ${need}`
+                : skipped ? `—`
+                :           `🔒`;
+    const sub = passed ? "" : skipped ? tx("Not required","ज़रूरी नहीं") : here
+      ? (due ? tx("Test ready — take it now","परीक्षा तैयार — अभी दो")
+             : (levelTestAvailable(n) || have < need ? tx((Math.max(0, need-have))+" more stars to unlock the test", "परीक्षा खोलने के लिए "+(Math.max(0, need-have))+" और सितारे")
+                                                     : tx("Play a few more "+levelTitle(n)+" lessons first", "पहले "+levelTitle(n)+" के कुछ और पाठ खेलो")))
+      : tx("Pass "+levelTitle(n-1)+" first", "पहले "+levelTitle(n-1)+" पास करो");
+    return `<div class="levelrow ${state_}"><span class="lvbadge">L${n}</span>
+      <span class="lvmain"><b>${esc(levelTitle(n))}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
+      <span class="lvright">${right}</span></div>`;
+  }).join("");
+  const due = cur <= 5 && levelTestDue(cur);
+  const sheet = el(`<div class="sheetwrap" id="lvlWrap">
+    <div class="sheet settingsheet" role="dialog" aria-modal="true" aria-label="${escAttr(title)}">
+      <div class="doubthead">
+        <div class="mascot small">${mascotSVG()}</div>
+        <div class="doubttitle"><div class="doubtq">${esc(title)}</div><div class="doubtsub">${esc(body)}</div></div>
+        <button class="sheetx" data-x aria-label="${escAttr(tx("Close","बंद करो"))}" title="${escAttr(tx("Close","बंद करो"))}">&times;</button>
+      </div>
+      <div class="levellist">${rows}</div>
+      ${due ? `<button class="btn primary wide" id="lvGo">🏆 ${esc(tx("Take the "+levelTitle(cur)+" test", levelTitle(cur)+" की परीक्षा दो"))}</button>` : ""}
+      <button class="btn ghost wide" id="dClose">${tx("Close","बंद करो")}</button>
+    </div>
+  </div>`);
+  document.body.appendChild(sheet);
+  const close = () => sheet.remove();
+  sheet.querySelector("#dClose").onclick = () => { sfx.back(); close(); };
+  sheet.querySelector("[data-x]").onclick = () => { sfx.back(); close(); };
+  sheet.onclick = e => { if(e.target === sheet){ sfx.back(); close(); } };
+  const go = sheet.querySelector("#lvGo");
+  if(go) go.onclick = () => { sfx.enter(); close(); renderTestIntro(cur, rerender); };
+  srSay(title + ". " + body); try { speak(body, state.lang, {}); } catch(e){}
+}
 function openProgressSheet(){
   const _ex = document.getElementById("progWrap"); if(_ex) _ex.remove();
   sfx.tap(); stopSpeech();
@@ -3384,6 +3602,7 @@ function openProgressSheet(){
         <div class="savechip">📖 ${esc(tx(done+" lessons", done+" पाठ"))}</div>
         <div class="savechip">★ ${esc(tx(stars+" stars", stars+" सितारे"))}</div>
         <div class="savechip">💎 ${esc(tx(gems+" gems", gems+" रत्न"))}</div>
+        <div class="savechip">🏆 ${esc(studentLevel() > 5 ? tx("All levels passed","सभी स्तर पास") : levelTitle(shownLevel()))}</div>
       </div>
       <div class="teachbox" id="progWarn" style="display:none">💡 <span></span></div>
       <button class="btn danger wide" id="progWipe">${tx("Start fresh","नए सिरे से शुरू करो")}</button>
@@ -3675,7 +3894,7 @@ function renderHome(){
   // With bands present, Home is the CLASS door and backs out to the mode picker; without them
   // the picker never shows (renderModeHome delegates here), so Home stays the root screen.
   if(haveBands) setBack("← " + tx("Back","वापस"), renderModeHome); else setBack(null);
-  const myBand = (currentStudent && currentStudent.band) || "";
+  const myBand = contentBandFor((currentStudent && currentStudent.band) || "");
   const hasMy = haveBands && bandList.some(b => b.key === myBand);
   const heroH1 = guest
     ? (haveBands ? tx("Choose your class group ✨", "अपनी कक्षा का समूह चुनो ✨")
@@ -3837,22 +4056,26 @@ function guestGate(course, lesson, back){
 function snapshotGuestProgress(){
   if(currentStudent && !currentStudent.local) return null;
   try {
-    return { progress: JSON.parse(JSON.stringify(state.progress || {})), coins: state.coins || 0 };
+    // The WHOLE state, not just stars: her level-test passes and seen-question lists are hers
+    // too, and mergeSavedState() in migrateGuestProgress knows how to fold every key of it.
+    return JSON.parse(JSON.stringify(state));
   } catch(e){ return null; }
 }
 function migrateGuestProgress(snap){
   if(!snap) return;                                     // called AFTER setStudent(newIdentity)
   const prog = snap.progress || snap;                   // tolerate the older bare-progress shape
-  let any = false;
   for(const ck in prog) for(const lk in prog[ck]) for(const aid in prog[ck][lk]){
     const s = prog[ck][lk][aid];
-    if(s > 0){ setStars(ck, lk, aid, s); recordAttempt({ track: ck, lesson: lk, activity: aid, stars: s, score: 0, total: 0, coins: 0 }); any = true; }
+    if(s > 0){ setStars(ck, lk, aid, s); recordAttempt({ track: ck, lesson: lk, activity: aid, stars: s, score: 0, total: 0, coins: 0 }); }
   }
-  // Gems ride along as a FLOOR, never a decrease — same rule mergeServerProgress uses. Without
-  // this she would watch her gem count drop to zero on the screen right after logging in, and
-  // gems are the reward she is collecting.
-  if(typeof snap.coins === "number" && snap.coins > (state.coins || 0)){ state.coins = snap.coins; any = true; }
-  if(any) save();
+  // Everything that is NOT stars folds through the same monotone rules the cross-device merge
+  // uses: gems as a FLOOR (she would otherwise watch her gem count drop to zero right after
+  // logging in, and gems are the reward she is collecting), level-test passes as passed||passed,
+  // bestPct as a max, and the seen-question lists as a union. Without this a girl who passed her
+  // Level 1 test as a guest lost the pass on sign-up — it stayed stranded under the old
+  // hikmat_state_<localid> key — and got walled behind that same test all over again.
+  mergeSavedState(state, snap);
+  save();
 }
 function renderGuestWall(group, backFn){
   stopSpeech(); rerender = () => renderGuestWall(group, backFn);
@@ -3877,45 +4100,60 @@ function renderGuestWall(group, backFn){
   refreshTop();
 }
 
-// ---------- Module-test gates ----------
-// Soft lock: NEW content waits behind the previous
-// module's test, but anything she has already played stays replayable. Detection is
+// ---------- Level gates ----------
+// Soft lock: NEW content waits behind the level ladder (above her level, or her level's test
+// falling due), but anything she has already played stays replayable. Detection is
 // client-side (works offline); a pass on another device syncs down via get_progress.
 function testGate(course, lesson, back){
-  const blocker = prevTestBlocker(course);
-  if(!blocker) return true;
-  if(lessonEarned(course.key, lesson.key) > 0) return true;   // already played → replay freely
-  renderTestWall(blocker, course, back);
+  const lock = lessonLock(course, lesson);
+  if(!lock) return true;
+  renderLevelWall(lock, course, back);
   return false;
 }
-function renderTestWall(prev, course, back){
-  stopSpeech(); rerender = () => renderTestWall(prev, course, back);
+function renderLevelWall(lock, course, back){
+  stopSpeech(); rerender = () => renderLevelWall(lock, course, back);
   root.innerHTML = "";
-  setBack(tx("← Back","← वापस"), () => renderHome());
-  const prevTitle = tx(prev.title, prev.titleHi || prev.title);
-  const nextTitle = tx(course.title, course.titleHi || course.title);
+  const toTrack = () => renderTrack(course, back);
+  setBack("← " + tx(course.title, course.titleHi), toTrack);
+  const n = lock.level, r = levelRules(lock.kind === "test" ? n : lock.need);
+  const cur = lock.kind === "test" ? n : lock.need;
+  const have = levelStars(cur), need = r.starsRequired || 100;
+  let h1, p, primary;
+  if(lock.kind === "test"){
+    h1 = tx("Time for your "+levelTitle(n)+" test! 🏆", "अब तुम्हारी "+levelTitle(n)+" परीक्षा का समय! 🏆");
+    p  = tx("You have collected "+have+" stars at "+levelTitle(n)+". Pass the test and new lessons open. Until then you can replay any lesson you have played.",
+            "तुमने "+levelTitle(n)+" पर "+have+" सितारे जमा कर लिए। परीक्षा पास करो और नए पाठ खुलेंगे। तब तक जो पाठ खेल चुक{ी|े} हो, उन्हें फिर से खेल सकत{ी|े} हो।");
+    primary = tx("Take the test →","परीक्षा दो →");
+  } else {
+    h1 = tx("This lesson opens at "+levelTitle(n), "यह पाठ "+levelTitle(n)+" पर खुलेगा");
+    p  = levelTestDue(cur)
+       ? tx("Your "+levelTitle(cur)+" test is ready — pass it to move up.", "तुम्हारी "+levelTitle(cur)+" परीक्षा तैयार है — पास करो और आगे बढ़ो।")
+       : tx("You are at "+levelTitle(cur)+". Collect "+need+" stars on "+levelTitle(cur)+" lessons (you have "+have+"), then pass the "+levelTitle(cur)+" test.",
+            "तुम "+levelTitle(cur)+" पर हो। "+levelTitle(cur)+" के पाठों पर "+need+" सितारे जमा करो (तुम्हारे पास "+have+" हैं), फिर "+levelTitle(cur)+" की परीक्षा पास करो।");
+    primary = levelTestDue(cur) ? tx("Take the "+levelTitle(cur)+" test →", levelTitle(cur)+" परीक्षा दो →") : "";
+  }
   root.appendChild(el(`<div class="screen">
     <div class="hero">
       <div class="mascot big m-happy">${mascotSVG()}</div>
-      <h1>🏆 ${tx("One test to go!","बस एक परीक्षा बाकी!")}</h1>
-      <p>${esc(tx("Pass the "+prevTitle+" module test to open "+nextTitle+".",
-                  prevTitle+" की मॉड्यूल परीक्षा पास करो, फिर "+nextTitle+" खुलेगा।"))}</p>
+      <h1>${esc(h1)}</h1>
+      <p>${esc(p)}</p>
+      <div class="levelbar" aria-hidden="true"><div style="width:${Math.min(100, Math.round(100*have/Math.max(1,need)))}%"></div></div>
+      <div class="muted">${esc(tx("★ "+have+" / "+need+" at "+levelTitle(cur), levelTitle(cur)+" पर ★ "+have+" / "+need))}</div>
     </div>
     <div class="center" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px">
-      <button class="btn primary" id="twGo">${tx("Go to the test →","परीक्षा पर जाओ →")}</button>
-      <button class="btn ghost" id="twCheck">${tx("🔄 Check again","🔄 फिर से देखो")}</button>
+      ${primary ? `<button class="btn primary" id="lwGo">${esc(primary)}</button>` : ""}
+      <button class="btn ghost" id="lwBack">← ${tx("Back to lessons","पाठों पर वापस")}</button>
+      <button class="btn ghost" id="lwCheck">${tx("🔄 Check again","🔄 फिर से देखो")}</button>
     </div>
   </div>`));
-  const narr = tx("Pass the "+prevTitle+" module test to open "+nextTitle+". Tap 'Go to the test'.",
-                  prevTitle+" की परीक्षा पास करो, फिर "+nextTitle+" खुलेगा। 'परीक्षा पर जाओ' दबाओ।");
-  setNarration(narr, narr); srSay(narr);
-  $("#twGo").onclick = () => { sfx.enter(); renderTrack(prev, back); };
-  $("#twCheck").onclick = async () => {
+  const narr = h1 + " " + p; setNarration(narr, narr); srSay(narr);
+  const go = $("#lwGo"); if(go) go.onclick = () => { sfx.enter(); renderTestIntro(cur, toTrack); };
+  $("#lwBack").onclick = () => { sfx.back(); toTrack(); };
+  $("#lwCheck").onclick = async () => {
     sfx.tap();
     await mergeServerProgress();                 // a pass on another device unlocks here
-    if(prevTestBlocker(course)){
-      flashToast(tx("Not passed yet — you can do it! 💛","अभी पास नहीं हु{ईं|ए} — तुम कर सकत{ी|े} हो! 💛"));
-    } else { sfx.complete(); renderTrack(course, back); }
+    if(studentLevel() > cur){ sfx.complete(); toTrack(); }
+    else flashToast(tx("Not yet — you can do it! 💛","अभी नहीं — तुम कर सकत{ी|े} हो! 💛"));
   };
   moveFocusToTop(); refreshTop();
 }
@@ -3938,18 +4176,24 @@ function renderTrack(course, back){
   // a lesson is "complete" (green) once every one of its activities has at least 1 star
   const isComplete = ls => levelsFor(ls).every(lv => getStars(course.key, ls.key, lv.id) > 0);
   const firstIncomplete = course.lessons.findIndex(ls => !isComplete(ls));
+  const cur = studentLevel();
   const items = course.lessons.map((ls, i) => {
     const earned = lessonEarned(course.key, ls.key);
     const done = isComplete(ls);
-    const cls = done ? "done" : (i===firstIncomplete ? "current" : "");
+    const lock = lessonLock(course, ls);
+    const lv = lessonLevel(course, ls);
+    const cls = lock ? "locked" : (done ? "done" : (i===firstIncomplete ? "current" : ""));
     return {
       cls,
       num: i+1,               // keep lesson numbering stable even when a video node sits above
       face: iconFor("act:learn","📚"),
       extras: cls==="current" ? `<span class="starttag">${tx("START","शुरू")}</span><span class="sparkle">✨</span>` : "",
       label: tx(ls.title, ls.titleHi),
-      sub: `<span class="lstars"><span class="staricon">★</span> ${earned}/${lessonMax(ls)}</span>`,
-      onClick: () => { if(!guestGate(course, ls, back)) return; if(!testGate(course, ls, back)) return; sfx.enter(); renderLessonMap(course, ls, back); },
+      sub: lock ? `<span class="lvtag">L${lv}</span> ${esc(lockText(lock))}`
+                : `<span class="lstars"><span class="staricon">★</span> ${earned}/${lessonMax(ls)}</span> <span class="lvtag">L${lv}</span>`,
+      onClick: lock
+        ? (() => { sfx.locked(); renderLevelWall(lock, course, back); })
+        : (() => { if(!guestGate(course, ls, back)) return; if(!testGate(course, ls, back)) return; sfx.enter(); renderLessonMap(course, ls, back); }),
     };
   });
   let narr = tx(course.title,course.titleHi)+". "+tx("Choose a lesson.","कोई पाठ चुनो।");
@@ -3964,34 +4208,18 @@ function renderTrack(course, back){
     });
     narr += " " + tx("There is a video lesson at the top.","सबसे ऊपर एक वीडियो पाठ है।");
   }
-  // 🏆 the module test closes the trail — unlocked once every lesson has ≥1 star everywhere
-  const hasTest = course.test && course.test.bank && course.test.bank.length;
-  if(hasTest){
-    const allDone = course.lessons.every(isComplete);
-    const tp = (state.testPassed||{})[course.key];
-    const tcls = !allDone ? "locked" : (tp && tp.passed ? "done" : "current");
+  // 🏆 her level test closes the trail while it is due — the one forward step from here
+  if(cur <= 5 && levelTestDue(cur)){
     items.push({
-      cls: tcls,
-      num: course.lessons.length + 1,
+      cls: "current",
+      num: "🏆",
       face: iconFor("star","🏆"),
-      extras: tcls==="current" ? `<span class="starttag">${tx("TEST","परीक्षा")}</span><span class="sparkle">✨</span>` : "",
-      label: tx("Module Test","मॉड्यूल परीक्षा"),
-      sub: !allDone ? tx("Finish all lessons first","पहले सभी पाठ पूरे करो")
-           : (tp && tp.passed ? esc(tx("Passed · best "+tp.bestPct+"%","पास · सर्वश्रेष्ठ "+tp.bestPct+"%"))
-                              : tx("Ready! Take the test","तैयार! परीक्षा दो")),
-      onClick: !allDone
-        ? (() => { sfx.locked(); const m = tx("Finish all lessons first.","पहले सभी पाठ पूरे करो।"); srSay(m); sayHi("पहले सभी पाठ पूरे करो"); })
-        : (() => {
-            // With accounts on, a test needed a real profile: the pass had to follow her
-            // across laptops, and a guest's would have evaporated at signup. With accounts
-            // off there is nowhere for it to travel TO — endTest() writes the pass straight
-            // into state.testPassed on this device, which is now the only place it lives.
-            // (Never via guestGate — that would burn a free-lesson slot on a non-lesson.)
-            if(AUTH_ENABLED && !currentStudent){ renderGuestWall(lessonGroup(course), () => renderTrack(course, back)); return; }
-            sfx.enter(); renderTestIntro(course, back);
-          }),
+      extras: `<span class="starttag">${tx("TEST","परीक्षा")}</span><span class="sparkle">✨</span>`,
+      label: tx(levelTitle(cur)+" test", levelTitle(cur)+" परीक्षा"),
+      sub: tx("Ready! Pass it to open new lessons","तैयार! पास करो और नए पाठ खोलो"),
+      onClick: () => { sfx.enter(); renderTestIntro(cur, () => renderTrack(course, back)); },
     });
-    if(allDone && !(tp && tp.passed)) narr += " " + tx("All lessons done — the module test is open!","सभी पाठ पूरे — मॉड्यूल परीक्षा खुल गई है!");
+    narr += " " + tx("Your "+levelTitle(cur)+" test is ready.","तुम्हारी "+levelTitle(cur)+" परीक्षा तैयार है।");
   }
   setNarration(narr, narr);
   renderPath(items);
@@ -5805,7 +6033,10 @@ function startLevel(course, lesson, lv, back){
     const nextLv = (_li >= 0 && _li + 1 < _LV.length) ? _LV[_li + 1] : null;
     const _ls = course.lessons.findIndex(l => l.key === lesson.key);
     const nextLesson = (!nextLv && _ls >= 0 && _ls + 1 < course.lessons.length) ? course.lessons[_ls + 1] : null;
-    const canGoOn = stars >= 1 && !!(nextLv || nextLesson);
+    // A due level test is the ONE forward step now (the map would lock the next lesson anyway):
+    // say so here rather than let "Next →" walk her into a locked screen.
+    const dueLevel = (studentLevel() <= 5 && levelTestDue(studentLevel())) ? studentLevel() : 0;
+    const canGoOn = !dueLevel && stars >= 1 && !!(nextLv || nextLesson);
     root.innerHTML="";
     root.appendChild(el(`<div class="screen result">
       <div class="mascot big ${stars>=2?"m-cheer":(stars>=1?"m-happy":"m-sad")}">${mascotSVG()}</div>
@@ -5815,14 +6046,16 @@ function startLevel(course, lesson, lv, back){
       <div class="muted" id="gemLine">+${score*5 + stars*10} ${tx("💎 gems","💎 रत्न")}</div>
       ${(!AUTH_ENABLED || currentStudent) ? `<div class="savechip">✓ ${tx("Saved on this device","इस डिवाइस पर सेव हो गया")}</div>` : ""}
       <div class="actionrow">
-        <button class="btn ${canGoOn ? "ghost" : "primary"}" id="again">${tx("Play again","फिर से खेलो")}</button>
-        <button class="btn ghost" id="map">${canGoOn ? tx("Map","नक्शा") : tx("Back to map →","नक्शे पर वापस →")}</button>
+        <button class="btn ${(canGoOn || dueLevel) ? "ghost" : "primary"}" id="again">${tx("Play again","फिर से खेलो")}</button>
+        <button class="btn ghost" id="map">${(canGoOn || dueLevel) ? tx("Map","नक्शा") : tx("Back to map →","नक्शे पर वापस →")}</button>
         ${canGoOn ? `<button class="btn primary" id="next">${nextLv ? tx("Next →","आगे →") : tx("Next lesson →","अगला पाठ →")}</button>` : ""}
+        ${dueLevel ? `<button class="btn primary" id="ltest">🏆 ${esc(tx("Take your "+levelTitle(dueLevel)+" test →", levelTitle(dueLevel)+" परीक्षा दो →"))}</button>` : ""}
       </div>
     </div>`));
     speak(stars >= 2 ? "Shabash! Well done" : "Good try");
     srSay(tx("You got "+score+" of "+rounds.length+", "+stars+" stars", rounds.length+" में से "+score+" सही, "+stars+" सितारे"));
     if(canGoOn) speak(tx("Tap Next to keep going.","आगे बढ़ने के लिए 'आगे' दबाओ।"), state.lang==="hi"?"hi":"en", { queue:true });
+    if(dueLevel) speak(tx("Your "+levelTitle(dueLevel)+" test is ready. Tap to take it.", "तुम्हारी "+levelTitle(dueLevel)+" परीक्षा तैयार है। देने के लिए दबाओ।"), state.lang==="hi"?"hi":"en", { queue:true });
     const rh=root.querySelector(".result h2"); if(rh){ rh.setAttribute("tabindex","-1"); try{ rh.focus({preventScroll:true}); }catch(e){} }
     // The gems she just earned travel from this card up into the counter. refreshTop() above
     // already wrote the new total, so flyGems rewinds the pill to the pre-lesson figure and
@@ -5832,6 +6065,8 @@ function startLevel(course, lesson, lv, back){
     requestAnimationFrame(() => flyGems($("#gemLine"), _earned, (state.coins||0) - _earned));
     $("#again").onclick=()=>{ sfx.restart(); startLevel(course, lesson, lv, back); };
     $("#map").onclick=()=>{ sfx.back(); backToLesson(); };
+    const lt = $("#ltest");
+    if(lt) lt.onclick = () => { sfx.enter(); actEnd(false); renderTestIntro(dueLevel, () => renderTrack(course, back)); };
     const nb = $("#next");
     if(nb) nb.onclick = () => {
       sfx.enter(); actEnd(false);                       // no-op if finish() already closed the clock
@@ -5848,99 +6083,116 @@ function startLevel(course, lesson, lv, back){
 }
 
 // ============================================================
-//  MODULE TEST — mandatory once a track's lessons are done.
+//  LEVEL TEST — the L1–L5 checkpoint that pauses new lessons until it is passed.
+//  Paper: drawn from the lessons SHE has played at the level (levelPool/buildPaper), never
+//  the same questions twice for her, shuffled per paper; ONE countdown PER QUESTION set by the
+//  question's difficulty (Test Level: easy/medium/hard seconds) — a look-up on another phone
+//  does not fit inside it. 75% passes (Test Level.pass_pct; the server recomputes).
 //  Anti-cheat contract (told to the child up front, in her language, out loud):
 //  leaving the screen ends the test and the attempt does not count. Signals:
 //  visibilitychange(hidden) — tab/app switch, minimize (primary, works everywhere)
 //  blur with a 1.5s refocus grace — window switch (grace absorbs stray OS popups)
 //  fullscreenchange exit — only after fullscreen was actually granted (iOS has none)
 //  pagehide — reload/close (the voided attempt is queued synchronously, so it survives)
-//  Plus: copy/paste/context-menu blocked, the Roshni AI overlay is hidden for the
+//  Context menu / copy / paste are blocked; the Roshni assistant is hidden for the
 //  duration (it could answer the question!), and a voluntary "Stop the test" button
 //  exists so a stuck child is never trapped into "misbehaving" her way out.
-//  Timing out is NOT cheating: answered-so-far submits and can still pass.
+//  Running out of time on a question is NOT cheating: it counts as unanswered and moves on.
 // ============================================================
-let TEST = null;   // {course, back, paper, idx, score, deadline, t0, timerIv, fsEntered, done, wake, _h, _blurT, _warned}
+let TEST = null;   // {level, ret, paper, idx, score, answers, qDeadline, t0, timerIv, fsEntered, done, wake, _h, _blurT, _warnedQ}
 
-function renderTestIntro(course, back){
-  stopSpeech(); rerender = () => renderTestIntro(course, back);
+function renderTestIntro(n, ret){
+  ret = ret || renderModeHome;
+  stopSpeech(); rerender = () => renderTestIntro(n, ret);
   root.innerHTML = "";
-  setBack("← " + tx(course.title, course.titleHi), () => renderTrack(course, back));
-  const t = course.test;
-  const n = Math.min(t.bank.length, Math.max(1, t.questionsPerPaper || 10));
-  const mins = Math.max(1, Math.round((t.timeLimitSecs || 600) / 60));
-  const seenCount = (((state.testSeen||{})[course.key]) || []).length;
-  const willReuse = (t.bank.length - seenCount) < n;
+  setBack("← " + tx("Back","वापस"), ret);
+  const r = levelRules(n), pool = levelPool(n);
+  const want = Math.min(pool.length, Math.max(1, r.questionsPerPaper || 20));
+  const seenCount = pool.filter(q => (((state.testSeen||{})["L"+n]) || []).includes(q.id)).length;
+  const willReuse = (pool.length - seenCount) < want;
+  const secs = r.secs || {}, lo = Math.min(secs.easy||20, secs.medium||30, secs.hard||45), hi = Math.max(secs.easy||20, secs.medium||30, secs.hard||45);
   const rules = [
-    ["⏱", tx("You have "+mins+" minutes.","तुम्हारे पास "+mins+" मिनट हैं।")],
-    ["❓", tx(n+" questions — no hints, no retries.",n+" सवाल — कोई संकेत नहीं, कोई दोबारा मौका नहीं।")],
+    ["⏱", tx("Each question has its own clock — "+lo+" to "+hi+" seconds. When it runs out, the next question comes.",
+              "हर सवाल की अपनी घड़ी है — "+lo+" से "+hi+" सेकंड। समय खत्म होते ही अगला सवाल आएगा।")],
+    ["❓", tx(want+" questions from the lessons you have played — no hints, no going back.",
+              want+" सवाल, तुम्हारे खेले पाठों से — कोई संकेत नहीं, पीछे नहीं जा सकते।")],
+    ["🎯", tx("Get "+(r.passPct||75)+"% right to reach "+levelTitle(Math.min(5, n+1))+".",
+              levelTitle(Math.min(5, n+1))+" पर पहुँचने के लिए "+(r.passPct||75)+"% सही करो।")],
     ["🚪", tx("Do not leave this screen. If you switch apps or leave, the test ends and does not count.",
-              "यह स्क्रीन मत छोड़ो। अगर तुम ऐप बदलोगी या बाहर जाओगी, परीक्षा खत्म हो जाएगी और गिनी नहीं जाएगी।")],
+              "यह स्क्रीन मत छोड़ो। अगर तुम ऐप बदलोग{ी|े} या बाहर जाओग{ी|े}, परीक्षा खत्म हो जाएगी और गिनी नहीं जाएगी।")],
   ];
   root.appendChild(el(`<div class="screen">
     <div class="hero">
-      <h1>🏆 ${tx("Module Test","मॉड्यूल परीक्षा")}</h1>
-      <p>${esc(tx(course.title, course.titleHi))}</p>
-      ${t.intro || t.introHi ? `<p>${esc(tx(t.intro || t.introHi, t.introHi || t.intro))}</p>` : ""}
+      <h1>🏆 ${esc(tx(levelTitle(n)+" test", levelTitle(n)+" परीक्षा"))}</h1>
+      ${r.intro || r.introHi ? `<p>${esc(tx(r.intro || r.introHi, r.introHi || r.intro))}</p>` : ""}
     </div>
-    <div>${rules.map(r => `<div class="rulerow"><span class="ric">${r[0]}</span><span>${esc(r[1])}</span></div>`).join("")}</div>
+    <div>${rules.map(x => `<div class="rulerow"><span class="ric">${x[0]}</span><span>${esc(x[1])}</span></div>`).join("")}</div>
     ${willReuse ? `<div class="center" style="margin-top:6px"><div class="savechip">${tx("You have practiced a lot — some questions may repeat.","तुमने खूब अभ्यास किया है — कुछ सवाल दोहराए जा सकते हैं।")}</div></div>` : ""}
     <div class="center" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px">
-      <button class="btn primary" id="tstart">${tx("Start the test →","परीक्षा शुरू करो →")}</button>
+      <button class="btn primary" id="tstart" ${pool.length < MIN_PAPER ? "disabled" : ""}>${tx("Start the test →","परीक्षा शुरू करो →")}</button>
       <button class="btn ghost" id="tback">← ${tx("Not yet","अभी नहीं")}</button>
     </div>
   </div>`));
-  const narr = rules.map(r => r[1]).join(" ") + " " +
+  const narr = rules.map(x => x[1]).join(" ") + " " +
                tx("Keep the screen awake. Tap Start when you are ready.","स्क्रीन जगी रखना। तैयार होने पर 'शुरू करो' दबाओ।");
   setNarration(narr, narr);
-  $("#tback").onclick = () => { sfx.back(); renderTrack(course, back); };
+  $("#tback").onclick = () => { sfx.back(); ret(); };
   $("#tstart").onclick = () => {
+    if($("#tstart").disabled) return;   // the 400ms defer below is a wide-open double-tap window
+    $("#tstart").disabled = true;
     sfx.enter();
     // Fullscreen is best-effort hardening (iOS Safari has no requestFullscreen — the
     // visibility/blur guards are the primary signal there). Guards arm after a beat so
     // the fullscreen transition itself can't trip them.
-    try { const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
-          if(p && p.catch) p.catch(() => {}); } catch(e){}
-    setTimeout(() => startTest(course, back), 400);
+    try { const pr = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+          if(pr && pr.catch) pr.catch(() => {}); } catch(e){}
+    setTimeout(() => startTest(n, ret), 400);
   };
   moveFocusToTop(); refreshTop();
 }
 
-function startTest(course, back){
-  const paper = buildPaper(course);
-  TEST = { course, back, paper, idx: 0, score: 0, done: false,
-           deadline: Date.now() + (course.test.timeLimitSecs || 600) * 1000,
-           t0: Date.now(), timerIv: null, fsEntered: !!document.fullscreenElement,
-           wake: null, _h: null, _blurT: null, _warned: false };
+function startTest(n, ret){
+  // Never start a second paper on top of a live one: the first TEST object would be dropped
+  // with its 250ms interval, its anti-cheat listeners and its wakeLock still attached, and
+  // nothing would ever release them (only voidTest/endTest clear TEST, and they can reach
+  // just one object). #tstart is also disabled on first tap; this is the backstop.
+  if(TEST && !TEST.done) return;
+  const paper = buildPaper(n);
+  if(!paper.qs.length){ ret(); return; }
+  TEST = { level: n, ret, paper, idx: 0, score: 0, answers: {}, done: false,
+           qDeadline: 0, t0: Date.now(), timerIv: null, fsEntered: !!document.fullscreenElement,
+           wake: null, _h: null, _blurT: null, _warnedQ: false, _answered: false };
   try {   // keep the screen awake — an OS screen-blank mid-thought must not void her test
+    const T = TEST;   // a lock that resolves late must not attach itself to a LATER attempt
     if(navigator.wakeLock && navigator.wakeLock.request)
-      navigator.wakeLock.request("screen").then(w => { if(TEST) TEST.wake = w; else w.release(); }).catch(() => {});
+      navigator.wakeLock.request("screen").then(w => { if(TEST === T) T.wake = w; else w.release(); }).catch(() => {});
   } catch(e){}
   setBack(null);                       // no back button: finish, stop, or time-out are the exits
   rerender = renderTestQ;              // language toggle re-renders the frozen question in place
   armTestGuards();
   if(document.hidden){ voidTest("hidden"); return; }   // never arm into an already-hidden tab
-  TEST.timerIv = setInterval(testTick, 500);
-  renderTestQ();
+  TEST.timerIv = setInterval(testTick, 250);
+  renderTestQ(true);
 }
 
 function testTick(){
-  const T = TEST; if(!T || T.done) return;
-  const left = Math.max(0, T.deadline - Date.now());
+  const T = TEST; if(!T || T.done || T._answered) return;
+  const left = Math.max(0, T.qDeadline - Date.now());
   const tt = $("#ttimer");
   if(tt){
-    const s = Math.ceil(left / 1000);
-    tt.textContent = Math.floor(s/60) + ":" + String(s%60).padStart(2, "0");
-    if(s <= 60 && !T._warned){
-      T._warned = true; tt.classList.add("urgent");
+    const sec = Math.ceil(left / 1000);
+    tt.textContent = "⏱ " + sec;
+    if(sec <= 5 && !T._warnedQ){
+      T._warnedQ = true; tt.classList.add("urgent");
       sfx.tap();                                        // a neutral cue — the "wrong" sound would read as blame
-      srSay(tx("One minute left","एक मिनट बचा"));
-    } else if(s <= 60){ tt.classList.add("urgent"); }
+    } else if(sec <= 5){ tt.classList.add("urgent"); }
   }
-  if(left <= 0) endTest("timed_out");
+  if(left <= 0) answerQ(null);                          // out of time: unanswered, move on
 }
 
-function renderTestQ(){
+// `fresh` = a NEW question is being shown (start its clock). A rerender (language toggle)
+// passes nothing and keeps the running clock.
+function renderTestQ(fresh){
   const T = TEST; if(!T || T.done) return;
   const qs = T.paper.qs, n = qs.length;
   let q = qs[T.idx];
@@ -5949,17 +6201,18 @@ function renderTestQ(){
   while(q && (!Array.isArray(q.choices) || !q.choices.includes(q.answer))){
     T.score++; T.idx++;
     if(T.idx >= n){ endTest("completed"); return; }
-    q = qs[T.idx];
+    q = qs[T.idx]; fresh = true;
   }
   if(!q){ endTest("completed"); return; }
+  if(fresh){ T.qDeadline = Date.now() + qSecs(q, T.level) * 1000; T._warnedQ = false; T._answered = false; }
   stopSpeech();
   root.innerHTML = "";
   const qText = tx(q.q, q.qHi || q.q);
   root.appendChild(el(`<div class="screen gameplay">
     <div class="maphead testhead">
-      <div><h2>🏆 ${tx("Test","परीक्षा")}</h2>
+      <div><h2>🏆 ${esc(tx(levelTitle(T.level)+" test", levelTitle(T.level)+" परीक्षा"))}</h2>
         <div class="sub">${esc(tx("Question "+(T.idx+1)+" of "+n, n+" में से सवाल "+(T.idx+1)))}</div></div>
-      <div class="testtimer" id="ttimer" role="timer"></div>
+      <div class="testtimer" id="ttimer" role="timer" aria-live="off"></div>
     </div>
     <div class="progress"><div id="bar" style="width:${(T.idx/n)*100}%"></div></div>
     <div class="gamebody">
@@ -5971,30 +6224,37 @@ function renderTestQ(){
     <div class="gamefooter"><button class="btn ghost" id="tstop">✋ ${tx("Stop the test","परीक्षा रोको")}</button></div>
   </div>`));
   setNarration(qText, q.qHi || q.q);                    // 🔊 re-reads THIS question, not stale rules
-  announce(() => speak(qText, state.lang==="hi" ? "hi" : "en"));
+  if(fresh) announce(() => speak(qText, state.lang==="hi" ? "hi" : "en"));
   const opts = $("#opts");
-  let answered = false;
   q.choices.forEach(c => {                              // frozen per-paper order — no reshuffle on rerender
     const b = el(`<button class="opt quizopt">${esc(c)}</button>`);
     b.onclick = () => {
-      if(answered || !TEST || TEST.done) return;
-      answered = true;
-      document.querySelectorAll(".quizopt").forEach(o => o.classList.add("disabled"));
+      if(!TEST || TEST.done || TEST._answered) return;
       b.classList.add("sel");                           // neutral: nothing may leak right/wrong mid-test
-      sfx.tap();
-      const fb = $("#fb"); if(fb){ fb.textContent = tx("Saved ✓","दर्ज ✓"); fb.className = "feedback"; }
-      if(c === q.answer) TEST.score++;
-      setTimeout(() => {
-        if(!TEST || TEST.done) return;
-        TEST.idx++;
-        TEST.idx >= n ? endTest("completed") : renderTestQ();
-      }, 350);
+      answerQ(c);
     };
     opts.appendChild(b);
   });
   $("#tstop").onclick = () => { sfx.tap(); voidTest("stopped"); };
   testTick();
   moveFocusToTop(); refreshTop();
+}
+// One answer (or null = the clock ran out) for the question on screen, then advance.
+function answerQ(choice){
+  const T = TEST; if(!T || T.done || T._answered) return;
+  T._answered = true;
+  const q = T.paper.qs[T.idx], n = T.paper.qs.length;
+  document.querySelectorAll(".quizopt").forEach(o => o.classList.add("disabled"));
+  T.answers[q.id] = choice == null ? "" : String(choice);
+  if(choice != null && choice === q.answer) T.score++;
+  const fb = $("#fb");
+  if(fb){ fb.textContent = choice == null ? tx("Time's up ⏱","समय खत्म ⏱") : tx("Saved ✓","दर्ज ✓"); fb.className = "feedback"; }
+  if(choice != null) sfx.tap();
+  setTimeout(() => {
+    if(!TEST || TEST.done) return;
+    TEST.idx++;
+    TEST.idx >= n ? endTest("completed") : renderTestQ(true);
+  }, choice == null ? 900 : 350);
 }
 
 // ---- anti-cheat guards (armed only between Start and any terminal state) ----
@@ -6039,6 +6299,10 @@ function _testTeardown(T){
 function _testSeenIds(T){   // only the questions actually DISPLAYED burn / get recorded
   return T.paper.qs.slice(0, Math.min(T.idx + 1, T.paper.qs.length)).map(q => q.id);
 }
+function _levelRec(n){
+  state.levelTests = state.levelTests || {};
+  return state.levelTests[n] = state.levelTests[n] || { passed:false, bestPct:0, attempts:0 };
+}
 
 function voidTest(reason){
   const T = TEST; if(!T || T.done) return;
@@ -6047,19 +6311,17 @@ function voidTest(reason){
   const n = T.paper.qs.length;
   const seen = _testSeenIds(T);
   const secs = Math.min(Math.round((Date.now() - T.t0) / 1000), 7200);
-  burnPaper(T.course.key, seen);                        // she saw them — a retake gets fresh ones
-  state.testPassed = state.testPassed || {};
-  const st = state.testPassed[T.course.key] || { passed:false, bestPct:0, attempts:0 };
+  burnPaper("L"+T.level, seen);                         // she saw them — a retake gets fresh ones
+  const st = _levelRec(T.level);
   st.attempts = (st.attempts||0) + 1;
-  state.testPassed[T.course.key] = st;
   save();                                               // synchronous — survives pagehide
-  recordTest({ track: T.course.key, paper: JSON.stringify(seen), score: 0, total: n,
-               status: "exited", exit_reason: reason, duration_secs: secs }, T.paper.clientId);
-  recordEvent({ kind:"test_exit", track: T.course.key, activity: "test", tool: reason,
+  recordTest({ level: T.level, paper: JSON.stringify(seen), answers: JSON.stringify(T.answers || {}),
+               score: 0, total: n, status: "exited", exit_reason: reason, duration_secs: secs }, T.paper.clientId);
+  recordEvent({ kind:"test_exit", track: "L"+T.level, activity: "test", tool: reason,
                 duration_secs: secs, count: T.idx + 1 });
-  const course = T.course, back = T.back;
+  const level = T.level, ret = T.ret;
   TEST = null;
-  renderTestVoided(course, back, reason);
+  renderTestVoided(level, ret, reason);
 }
 
 function endTest(status){
@@ -6068,27 +6330,26 @@ function endTest(status){
   _testTeardown(T);
   const n = T.paper.qs.length;
   const pct = n ? Math.round(100 * T.score / n) : 0;
-  const passed = pct >= (T.course.test.passPct || 60);  // server recomputes authoritatively on sync
-  burnPaper(T.course.key, _testSeenIds(T));
-  state.testPassed = state.testPassed || {};
-  const st = state.testPassed[T.course.key] || { passed:false, bestPct:0, attempts:0 };
+  const passed = pct >= (levelRules(T.level).passPct || 75);  // server recomputes authoritatively on sync
+  burnPaper("L"+T.level, _testSeenIds(T));
+  const st = _levelRec(T.level);
   st.passed = st.passed || passed;
   st.bestPct = Math.max(st.bestPct||0, pct);
   st.attempts = (st.attempts||0) + 1;
-  state.testPassed[T.course.key] = st;
   save();
-  recordTest({ track: T.course.key, paper: JSON.stringify(_testSeenIds(T)), score: T.score, total: n,
-               status, exit_reason: "", duration_secs: Math.min(Math.round((Date.now() - T.t0) / 1000), 7200) },
+  recordTest({ level: T.level, paper: JSON.stringify(_testSeenIds(T)), answers: JSON.stringify(T.answers || {}),
+               score: T.score, total: n, status, exit_reason: "",
+               duration_secs: Math.min(Math.round((Date.now() - T.t0) / 1000), 7200) },
              T.paper.clientId);
-  const course = T.course, back = T.back, score = T.score;
+  const level = T.level, ret = T.ret, score = T.score;
   TEST = null;
-  renderTestResult(course, back, { pct, passed, score, n, timedOut: status === "timed_out" });
+  renderTestResult(level, ret, { pct, passed, score, n });
 }
 
-function renderTestVoided(course, back, reason){
-  stopSpeech(); rerender = () => renderTestVoided(course, back, reason);
+function renderTestVoided(n, ret, reason){
+  stopSpeech(); rerender = () => renderTestVoided(n, ret, reason);
   root.innerHTML = "";
-  setBack("← " + tx(course.title, course.titleHi), () => renderTrack(course, back));
+  setBack("← " + tx("Back","वापस"), ret);
   const stopped = reason === "stopped";
   const bodyMsg = stopped
     ? tx("You stopped the test, so it was not counted. Whenever you feel ready, take a new test with new questions.",
@@ -6106,30 +6367,30 @@ function renderTestVoided(course, back, reason){
   </div>`));
   setNarration(bodyMsg, bodyMsg); srSay(bodyMsg);
   const rh = root.querySelector(".result h2"); if(rh){ rh.setAttribute("tabindex","-1"); try { rh.focus({preventScroll:true}); } catch(e){} }
-  $("#tretake").onclick = () => { sfx.restart(); renderTestIntro(course, back); };
-  $("#tvback").onclick  = () => { sfx.back(); renderTrack(course, back); };
+  $("#tretake").onclick = () => { sfx.restart(); renderTestIntro(n, ret); };
+  $("#tvback").onclick  = () => { sfx.back(); ret(); };
   refreshTop();
 }
 
-function renderTestResult(course, back, r){
-  stopSpeech(); rerender = () => renderTestResult(course, back, r);
+function renderTestResult(n, ret, r){
+  stopSpeech(); rerender = () => renderTestResult(n, ret, r);
   root.innerHTML = "";
-  setBack("← " + tx(course.title, course.titleHi), () => renderTrack(course, back));
-  const nextT = nextTrackInGroup(course);
-  const passMsg = tx("You passed! 🏆","तुम पास हो ग{ई|ए}! 🏆");
-  const failMsg = tx("Good try — you need "+(course.test.passPct||60)+"% to pass.",
-                     "अच्छी कोशिश — पास होने के लिए "+(course.test.passPct||60)+"% चाहिए।");
+  setBack("← " + tx("Back","वापस"), ret);
+  const nextL = Math.min(5, n + 1), passPct = levelRules(n).passPct || 75;
+  const passMsg = n >= 5 && r.passed
+    ? tx("You finished every level! 🏆","तुमने हर स्तर पूरा कर लिया! 🏆")
+    : tx("You passed! You are now "+levelTitle(nextL)+" 🏆", "तुम पास हो ग{ई|ए}! अब तुम "+levelTitle(nextL)+" पर हो 🏆");
+  const failMsg = tx("Good try — you need "+passPct+"% to pass.",
+                     "अच्छी कोशिश — पास होने के लिए "+passPct+"% चाहिए।");
   root.appendChild(el(`<div class="screen result">
     <div class="mascot big ${r.passed?"m-cheer":"m-sad"}">${mascotSVG()}</div>
-    <h2>${r.passed ? passMsg : failMsg}</h2>
+    <h2>${esc(r.passed ? passMsg : failMsg)}</h2>
     <div class="earn pop">${r.pct}%</div>
     <div class="muted">${tx("You got "+r.score+" of "+r.n, r.n+" में से "+r.score+" सही")}</div>
-    ${r.timedOut ? `<div class="muted">${tx("Time ran out — the answers you gave were counted.","समय खत्म हो गया — तुम्हारे दिए उत्तर गिने गए।")}</div>` : ""}
-    ${r.passed && nextT ? `<div class="savechip">🎉 ${esc(tx("The next module is now open: "+nextT.title,"अगला मॉड्यूल अब खुला है: "+(nextT.titleHi||nextT.title)))}</div>` : ""}
-    ${!r.passed ? `<div class="muted" style="margin-top:6px">${tx("Practice the lessons and try a new test.","पाठों का अभ्यास करो और नई परीक्षा दो।")}</div>` : ""}
+    ${r.passed && n < 5 ? `<div class="savechip">🎉 ${esc(tx("New lessons are open — look for L"+nextL+" on the trail.","नए पाठ खुल गए — रास्ते पर L"+nextL+" देखो।"))}</div>` : ""}
+    ${!r.passed ? `<div class="muted" style="margin-top:6px">${tx("Replay the lessons and try a new test — the questions will be different.","पाठ फिर से खेलो और नई परीक्षा दो — सवाल अलग होंगे।")}</div>` : ""}
     <div class="actionrow">
-      ${r.passed ? `<button class="btn ghost" id="tagain">${tx("Take it again","फिर से दो")}</button>
-                    <button class="btn primary" id="tdone">${tx("Back to lessons →","पाठों पर वापस →")}</button>`
+      ${r.passed ? `<button class="btn primary" id="tdone">${tx("Back to lessons →","पाठों पर वापस →")}</button>`
                  : `<button class="btn ghost" id="tdone">← ${tx("Back to lessons","पाठों पर वापस")}</button>
                     <button class="btn primary" id="tagain">${tx("Try a new test","नई परीक्षा दो")}</button>`}
     </div>
@@ -6138,8 +6399,8 @@ function renderTestResult(course, back, r){
   const narr = (r.passed ? passMsg : failMsg) + " " + tx("You got "+r.score+" of "+r.n+".", r.n+" में से "+r.score+" सही।");
   setNarration(narr, narr); srSay(narr);
   const rh = root.querySelector(".result h2"); if(rh){ rh.setAttribute("tabindex","-1"); try { rh.focus({preventScroll:true}); } catch(e){} }
-  $("#tagain").onclick = () => { sfx.restart(); renderTestIntro(course, back); };
-  $("#tdone").onclick  = () => { sfx.back(); renderTrack(course, back); };
+  const ag = $("#tagain"); if(ag) ag.onclick = () => { sfx.restart(); renderTestIntro(n, ret); };
+  $("#tdone").onclick  = () => { sfx.back(); ret(); };
   refreshTop();
 }
 
@@ -6359,6 +6620,8 @@ async function loadFromBackend(){
       if(cj.ok){ const arr = await cj.json(); if(Array.isArray(arr) && arr.length){ COURSES = arr; } }
     } catch(e){}
   }
+  // 1c) the level-test bank rides its own three layers (see loadTestBank) — fire and forget
+  loadTestBank();
   // 2) then try live (only succeeds when served from Frappe and online)
   try {
     const [cr, sr, xr] = await Promise.all([
@@ -6370,6 +6633,7 @@ async function loadFromBackend(){
       const j = await cr.json();
       if(j && Array.isArray(j.message) && j.message.length){
         COURSES = j.message;
+        dropLevelCache();                       // new content → new per-level rollups
         localStorage.setItem(CACHE_KEY, JSON.stringify(COURSES));
       }
     }
@@ -6466,12 +6730,11 @@ async function syncTests(){
         // The server may pass a paper the client mis-scored (its pass_pct is authoritative).
         // Credit it ONLY to the student who took it — a boot-time flush on a shared laptop
         // can be shipping girl A's attempt while girl B is signed in.
-        if(body && body.ok && body.passed && currentStudent && currentStudent.id === t.student){
-          state.testPassed = state.testPassed || {};
-          const st = state.testPassed[t.track] || { passed:false, bestPct:0, attempts:0 };
-          st.passed = true;
-          state.testPassed[t.track] = st;
-          save();
+        if(body && body.ok && currentStudent && currentStudent.id === t.student && t.level){
+          const st = _levelRec(t.level);
+          st.passed = st.passed || !!body.passed;
+          if(typeof body.pct === "number") st.bestPct = Math.max(st.bestPct||0, body.pct);
+          save(); refreshTop();
         }
       } catch(e){ remaining.push(t); }
     }
@@ -6692,23 +6955,9 @@ function reportDoubt(d){
   syncDoubts();
 }
 
-// "🙋 Help Needed" — a top-bar tool that raises a help request from ANY screen. It logs a
-// doubt (with the current lesson context if in gameplay) which notifies the facilitators'
-// Desk (report_doubt → _notify_facilitators). Works offline: the doubt queues and syncs later.
-function helpNeeded(){
-  sfx.tap();
-  const ctx = doubtCtx || {};
-  reportDoubt({
-    track: ctx.course ? ctx.course.key : "",
-    lesson: ctx.lesson ? ctx.lesson.key : "",
-    activity: ctx.lv ? ctx.lv.id : "",
-    question: ("Help needed" + (lastQ ? (": " + lastQ) : "")).slice(0, 490),
-  });
-  const msg = tx("Your teacher has been told — help is coming! 🙋","शिक्षक को बता दिया — मदद आ रही है! 🙋");
-  srSay(msg);
-  try { speak(msg, state.lang, {}); } catch(e){}
-  flashToast(msg);
-}
+// The "🙋 Help Needed" top-bar button was removed on 2026-09-07 (Vishal): a raise-hand that pings
+// a facilitator's Desk only made sense in a supervised campus, and the app is no longer run that
+// way. reportDoubt()/report_doubt stay — in-activity doubts still queue and sync as before.
 function flashToast(msg){
   const ex = document.getElementById("hkToast"); if(ex) ex.remove();
   const t = el(`<div id="hkToast" role="status">${esc(msg)}</div>`);
@@ -6897,6 +7146,11 @@ function setStudent(stu){
   if(stu) localStorage.setItem("hikmat_current", JSON.stringify(stu));
   else localStorage.removeItem("hikmat_current");
   state = loadState();                  // swap to this identity's saved progress
+  dropLevelCache();                     // WHICH student `state` points at is the third input to
+                                        // every per-level rollup, alongside stars/passes (save)
+                                        // and the bank (applyTestBank) — without this the
+                                        // previous learner's star totals and pools decide the
+                                        // gates for the next girl on a shared phone.
   attResume();                          // start the incoming student's clock (no-op for guests)
 }
 async function mergeServerProgress(){
@@ -6906,14 +7160,14 @@ async function mergeServerProgress(){
   if(!p) return;
   for(const ck in p) for(const lk in p[ck]) for(const aid in p[ck][lk]) setStars(ck, lk, aid, p[ck][lk][aid]);
   if(typeof res.gems === "number") state.coins = Math.max(state.coins||0, res.gems);  // gem total follows her across laptops
-  // Module tests: monotone unions, safe under any interleaving of devices and queues.
-  if(res.tests){
-    state.testPassed = state.testPassed || {};
-    for(const tk in res.tests){
-      const s = res.tests[tk], l = state.testPassed[tk] || { passed:false, bestPct:0, attempts:0 };
-      state.testPassed[tk] = { passed: l.passed || !!s.passed,
-                               bestPct: Math.max(l.bestPct||0, s.bestPct||0),
-                               attempts: Math.max(l.attempts||0, s.attempts||0) };
+  // Level tests: monotone unions, safe under any interleaving of devices and queues.
+  if(res.levels){
+    for(const k in res.levels){
+      const n = parseInt(k, 10); if(!(n >= 1 && n <= 5)) continue;
+      const sv = res.levels[k], l = _levelRec(n);
+      state.levelTests[n] = { passed: l.passed || !!sv.passed,
+                              bestPct: Math.max(l.bestPct||0, sv.bestPct||0),
+                              attempts: Math.max(l.attempts||0, sv.attempts||0) };
     }
   }
   if(res.testSeen){                        // her no-repeat guarantee follows her to a NEW device
@@ -6949,7 +7203,7 @@ function renderSignup(draft){
   // loaded). Standalone or offline the bundled fallback is Life-Skills only (no band-tagged tracks),
   // so bandTracks() is empty for every band → skip the picker entirely rather than showing an empty,
   // un-selectable field that leaves "Create & start" permanently disabled. Mirrors renderHome.
-  const bandList = BANDS.filter(b => bandTracks(b.key).some(c => c.published && c.lessons.length));
+  const bandList = classOptions();
   const haveBands = bandList.length > 0;
   root.appendChild(el(`<div class="screen">
     <div class="hero"><h1>${tx("Create your name ✨","अपना नाम बनाओ ✨")}</h1>
@@ -7666,7 +7920,7 @@ function renderCompleteProfile(ctx){
   }
   let avatar = ctx.avatar || AVATARS[0], band = ctx.band || "",
       gender = ctx.gender || "", mascot = ctx.mascot || "roshni";
-  const bandList = BANDS.filter(b => bandTracks(b.key).some(c => c.published && c.lessons.length));
+  const bandList = classOptions();
   const haveBands = bandList.length > 0;
   const who = (ctx.existing && ctx.email)
     ? tx("Signed in as " + ctx.email, ctx.email + " से साइन इन")
@@ -7880,7 +8134,7 @@ function renderProfile(){
   let band   = stu.band || "";
   let gender = stu.gender || state.gender || "";
   let mascot = stu.mascot || currentMascot();
-  const bandList = BANDS.filter(b => bandTracks(b.key).some(c => c.published && c.lessons.length));
+  const bandList = classOptions();
   const haveBands = bandList.length > 0;
   // Which "change your password" story this account gets. There are three, and offering the
   // wrong one is worse than offering none:
@@ -8570,8 +8824,8 @@ state.hindi = state.hindi===true;
 state.lang = state.lang || "en";
 state.sound = state.sound!==false;
 state.theme = state.theme || "light";
-state.testSeen = state.testSeen || {};       // states saved before module tests existed
-state.testPassed = state.testPassed || {};
+state.testSeen = state.testSeen || {};       // states saved before level tests existed
+state.levelTests = state.levelTests || {};
 state.videosSeen = state.videosSeen || {};
 state.lastLoc = state.lastLoc || {};         // per-browse-mode resume positions (class / subject / life)
 renderModeHome();      // instant: bundled or cached content, fully offline
