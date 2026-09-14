@@ -1,13 +1,22 @@
 /* Hikmat PWA service worker — offline-first app shell + content.
    Scope: /assets/hikmat/. Bump CACHE to ship an update to installed PWAs. */
 const CACHE = "hikmat-pwa-v9";   // v9: lesson levels (L1–L5) + the level-test bank
+// The release token, derived from CACHE so there is exactly ONE thing to bump. /assets/ is served
+// `cache-control: immutable, max-age=31536000` — correct for Frappe's hash-named bundles, wrong
+// for ours, which are plain filenames that change content under a fixed name. A proxy therefore
+// answers the next release's game.html from its year-old copy (observed on prod: x-proxy-cache
+// HIT serving a week-old game.html with none of the new code in it, while the origin had the new
+// file). Stamping the release onto the URL gives every release its own cache key.
+// www/play.py reads this same line, so the redirect and the shell always agree.
+const REL = CACHE.slice(CACHE.lastIndexOf("-") + 1);
 const BASE = "/assets/hikmat/";
+const rel = (p) => BASE + p + "?r=" + REL;
 const SHELL = [
-  BASE + "game.html",
-  BASE + "curriculum.json",          // full 283-lesson offline baseline (survives localStorage eviction)
-  BASE + "testbank.json",            // the L1–L5 level-test question bank, same contract
-  BASE + "manifest.webmanifest",
-  BASE + "icons/icon-192.png",
+  rel("game.html"),
+  rel("curriculum.json"),            // full 283-lesson offline baseline (survives localStorage eviction)
+  rel("testbank.json"),              // the L1–L5 level-test question bank, same contract
+  rel("manifest.webmanifest"),
+  BASE + "icons/icon-192.png",       // icons are content-stable; no token needed
   BASE + "icons/icon-512.png",
   BASE + "icons/icon-512-maskable.png",
   BASE + "icons/icon-180.png",
@@ -31,10 +40,10 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-function networkFirst(req) {
+function networkFirst(req, opts) {
   return fetch(req)
     .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); return res; })
-    .catch(() => caches.match(req));
+    .catch(() => caches.match(req, opts || undefined));
 }
 
 self.addEventListener("fetch", (e) => {
@@ -50,10 +59,11 @@ self.addEventListener("fetch", (e) => {
   if (!url.pathname.startsWith(BASE)) return;             // only manage this app's own static files
 
   const isDoc = req.mode === "navigate" || url.pathname.endsWith("game.html");
+  const anyRel = { ignoreSearch: true };   // inside BASE the query is only ever ?r=<release>
   if (isDoc) {
-    e.respondWith(networkFirst(req).then((r) => r || caches.match(BASE + "game.html")));
+    e.respondWith(networkFirst(req, anyRel).then((r) => r || caches.match(BASE + "game.html", anyRel)));
   } else {
-    e.respondWith(caches.match(req).then((r) => r || fetch(req).then((res) => {
+    e.respondWith(caches.match(req, anyRel).then((r) => r || fetch(req).then((res) => {
       const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); return res;
     })));
   }

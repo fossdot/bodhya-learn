@@ -1958,6 +1958,16 @@ const TESTBANK_KEY = "hikmat_testbank_cache";
 const MIN_PAPER = 5;                          // fewer learned questions than this → the test can't run yet
 function levelDefaults(n){ return { level:n, title:"Level "+n, titleHi:"स्तर "+n, active:true, starsRequired:100,
                                     questionsPerPaper:20, passPct:75, secs:{easy:20, medium:30, hard:45}, intro:"", introHi:"" }; }
+// This page is normally opened as game.html?r=<release> (www/play.py stamps it) because
+// /assets/ is served immutable for a year under plain filenames — without a token a proxy
+// answers the new release from last release's copy. Carry whatever token we were loaded with
+// on to the sibling assets so all three come from the same release. No token (file://, the
+// packaged app, a direct link) → plain URLs, exactly as before.
+function assetURL(name){
+  var r = "";
+  try { r = new URLSearchParams(location.search).get("r") || ""; } catch(e){ r = ""; }
+  return "/assets/hikmat/" + name + (r ? "?r=" + encodeURIComponent(r) : "");
+}
 function levelRules(n){ return (LEVEL_BANK.levels||[]).find(l => l.level===n) || levelDefaults(n); }
 function levelTitle(n){ const r = levelRules(n); return tx(r.title || ("Level "+n), r.titleHi || r.title || ("स्तर "+n)); }
 function defaultLevel(i, n){ return Math.min(5, 1 + Math.floor(Math.max(0,i) * 5 / Math.max(1,n))); }
@@ -2092,7 +2102,7 @@ async function loadTestBank(){
   let have = false;
   try { have = applyTestBank(JSON.parse(localStorage.getItem(TESTBANK_KEY))); } catch(e){}
   if(!have){
-    try { const r = await fetch("/assets/hikmat/testbank.json", {headers:{Accept:"application/json"}});
+    try { const r = await fetch(assetURL("testbank.json"), {headers:{Accept:"application/json"}});
           if(r.ok) have = applyTestBank(await r.json()); } catch(e){}
   }
   try {
@@ -6616,7 +6626,7 @@ async function loadFromBackend(){
   //     back to the tiny bundled COURSES (4 tracks) instead of all lessons.
   if(!haveCache){
     try {
-      const cj = await fetch("/assets/hikmat/curriculum.json", {headers:{Accept:"application/json"}});
+      const cj = await fetch(assetURL("curriculum.json"), {headers:{Accept:"application/json"}});
       if(cj.ok){ const arr = await cj.json(); if(Array.isArray(arr) && arr.length){ COURSES = arr; } }
     } catch(e){}
   }
