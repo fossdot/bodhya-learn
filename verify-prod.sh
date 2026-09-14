@@ -5,7 +5,9 @@
 #   ./verify-prod.sh https://other.site
 set -uo pipefail
 SITE="${1:-https://learn.bodhya.net}"
-EXPECT_BANK="${EXPECT_BANK:-2807}"      # 2780 seeded + 27 carried over from Module Tests
+EXPECT_BANK="${EXPECT_BANK:-2780}"      # the seeded bank. A site that had Module Test ROWS
+                                        # authored in Desk carries those over on top (the dev
+                                        # site had 27); prod had none, so 2780 is the floor.
 EXPECT_LESSONS="${EXPECT_LESSONS:-283}"
 ok=0; bad=0
 say(){ if [ "$1" = pass ]; then ok=$((ok+1)); printf '  \033[32mPASS\033[0m %s\n' "$2"; else bad=$((bad+1)); printf '  \033[31mFAIL\033[0m %s\n' "$2"; fi; }
@@ -35,10 +37,14 @@ else
   [ "$levels" = 5 ] && say pass "5 Test Levels" || say fail "$levels Test Levels, expected 5"
 fi
 
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$SITE/assets/hikmat/testbank.json")
+# Assets are served "cache-control: immutable, max-age=31536000" under a PLAIN filename, so an
+# intermediary will hand back the previous deploy's copy for a year. Always cache-bust here,
+# or a perfectly good deploy reads as a failed one.
+CB="cb=$(date +%s)$$"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$SITE/assets/hikmat/testbank.json?$CB")
 [ "$code" = 200 ] && say pass "testbank.json served ($code)" || say fail "testbank.json served ($code, expected 200)"
 
-read -r total leveled < <(curl -s --max-time 25 "$SITE/assets/hikmat/curriculum.json" | python3 -c '
+read -r total leveled < <(curl -s --max-time 25 "$SITE/assets/hikmat/curriculum.json?$CB" | python3 -c '
 import json,sys
 try:
     ls = [l for t in json.load(sys.stdin) for l in t["lessons"]]
@@ -48,7 +54,16 @@ except Exception:
 [ "$total" -ge "$EXPECT_LESSONS" ] && say pass "curriculum has $total lessons" || say fail "curriculum has $total lessons, expected >= $EXPECT_LESSONS"
 [ "$total" -gt 0 ] && [ "$leveled" = "$total" ] && say pass "every lesson carries a level ($leveled/$total)" || say fail "lessons with a level: $leveled/$total"
 
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$SITE/assets/hikmat/game.html")
+live=$(curl -s --max-time 25 "$SITE/api/method/hikmat.api.get_courses" | python3 -c '
+import json,sys
+try:
+    c = json.load(sys.stdin)["message"]; ls=[l for t in c for l in t["lessons"]]
+    print(sum(1 for l in ls if l.get("level")), len(ls))
+except Exception: print(0,0)')
+set -- $live
+[ "$1" = "$2" ] && [ "$1" != 0 ] && say pass "live get_courses: every lesson carries a level ($1/$2)" || say fail "live get_courses levels: $1/$2"
+
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$SITE/assets/hikmat/game.html?$CB")
 [ "$code" = 200 ] && say pass "game.html served ($code)" || say fail "game.html served ($code)"
 
 echo
