@@ -1,6 +1,6 @@
 /* Hikmat PWA service worker — offline-first app shell + content.
    Scope: /assets/hikmat/. Bump CACHE to ship an update to installed PWAs. */
-const CACHE = "hikmat-pwa-v9";   // v9: lesson levels (L1–L5) + the level-test bank
+const CACHE = "hikmat-pwa-v10";  // v10: release-stamped asset + worker URLs (v9: level tests)
 // The release token, derived from CACHE so there is exactly ONE thing to bump. /assets/ is served
 // `cache-control: immutable, max-age=31536000` — correct for Frappe's hash-named bundles, wrong
 // for ours, which are plain filenames that change content under a fixed name. A proxy therefore

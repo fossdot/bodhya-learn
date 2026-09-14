@@ -8904,7 +8904,15 @@ if("serviceWorker" in navigator && location.protocol.startsWith("http")){
     document.body.appendChild(t);
   }
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/assets/hikmat/sw.js", { scope: "/assets/hikmat/" })
+    // Register the worker at THIS release's URL, not the bare one. The proxy keeps a separate
+    // immutable entry per Accept-Encoding variant and several of them freeze: measured on prod,
+    // "gzip, deflate, br, zstd" — the exact string modern Chrome sends — served a fortnight-old
+    // sw.js AND a fortnight-old game.html, so the very fix meant to rescue those learners could
+    // never reach them. A release-stamped script URL is a new cache key on every variant.
+    // updateViaCache:"none" additionally keeps the BROWSER's HTTP cache out of the update check.
+    // The scope is what defines the registration, so stamping the script URL replaces the old
+    // worker rather than adding a second one.
+    navigator.serviceWorker.register(assetURL("sw.js"), { scope: "/assets/hikmat/", updateViaCache: "none" })
       .then(reg => {
         reg.addEventListener("updatefound", () => {
           const nw = reg.installing;

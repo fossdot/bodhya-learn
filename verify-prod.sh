@@ -76,10 +76,34 @@ if [ -z "$redirect" ]; then
   say fail "/play stamps a release token on the game URL (found none — visitors get the proxy's copy)"
 else
   say pass "/play -> $redirect"
-  real=$(curl -s --max-time 40 "$SITE$redirect")
+  # Ask the way a real phone asks. The proxy keeps a SEPARATE immutable entry per Accept-Encoding
+  # string, and they do not expire together: "gzip, deflate, br, zstd" (modern Chrome) served a
+  # fortnight-old game.html and sw.js while four other variants were current, so a default curl
+  # reported a healthy deploy that no actual learner could see.
+  CHROME_AE='gzip, deflate, br, zstd'
+  real=$(curl -s --max-time 40 --compressed -H "Accept-Encoding: $CHROME_AE" "$SITE$redirect")
   n=$(printf '%s' "$real" | grep -c 'testOwnsNav')
-  [ "$n" -gt 0 ] && say pass "that URL really serves the current game (level-test code present)" \
-                 || say fail "that URL serves a STALE game — no level-test code in it"
+  [ "$n" -gt 0 ] && say pass "that URL serves the current game to a real browser (Chrome Accept-Encoding)" \
+                 || say fail "that URL serves a STALE game to a real browser — no level-test code in it"
+
+  # The worker must be reachable at the stamped URL too, or the fix that rescues the bare
+  # start_url can never reach the learners who need it.
+  swurl=$(printf '%s' "$real" | grep -oE 'sw\.js\?r=[A-Za-z0-9._-]+' | head -1)
+  if [ -z "$swurl" ]; then
+    say fail "the game registers a release-stamped sw.js (found none — the worker update can be pinned stale)"
+  else
+    sw=$(curl -s --max-time 30 --compressed -H "Accept-Encoding: $CHROME_AE" "$SITE/assets/hikmat/$swurl")
+    printf '%s' "$sw" | grep -q 'networkFirst(DOC' \
+      && say pass "sw.js?r= serves the current worker to a real browser" \
+      || say fail "sw.js?r= serves a STALE worker to a real browser"
+  fi
+
+  # Informational: the bare URL is EXPECTED to be stale on some variants. It is survivable only
+  # because the worker rewrites bare navigations — a first-ever visit on that URL still loses.
+  bare=$(curl -s --max-time 40 --compressed -H "Accept-Encoding: $CHROME_AE" "$SITE/assets/hikmat/game.html")
+  printf '%s' "$bare" | grep -q 'testOwnsNav' \
+    && echo "  note  bare game.html is currently CURRENT on this variant" \
+    || echo "  note  bare game.html is STALE on this variant (expected; the service worker rewrites it — but share /play)"
 fi
 
 echo
