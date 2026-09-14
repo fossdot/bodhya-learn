@@ -1087,9 +1087,12 @@ def social_login(provider=None, redirect_to=None):
     frappe.local.response["location"] = url
 
 
-#: Where a social sign-in comes back to when the caller names nowhere. The game is served as a
-#: static asset by Frappe, so this is a real URL on this site and not a route we have to keep.
-GAME_PATH = "/assets/hikmat/game.html"
+#: Where a social sign-in comes back to when the caller names nowhere. This is deliberately the
+#: /play route and NOT the static asset it redirects to: /assets/ is served immutable for a year
+#: under a fixed filename, and the proxy keeps a separate entry per Accept-Encoding variant, so
+#: the bare asset URL can hand back a previous release for a long time. /play stamps the current
+#: release token on the way through (see www/play.py), so it is the only door guaranteed current.
+GAME_PATH = "/play"
 _REDIRECT_PATH_RE = re.compile(r"^/[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*$")
 
 
