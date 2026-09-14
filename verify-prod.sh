@@ -66,6 +66,22 @@ set -- $live
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$SITE/assets/hikmat/game.html?$CB")
 [ "$code" = 200 ] && say pass "game.html served ($code)" || say fail "game.html served ($code)"
 
+# THE CHECK THAT MATTERS: walk the door a real learner walks. /play stamps a release token onto
+# the game URL precisely because the proxy caches /assets/ immutable for a year under a plain
+# filename — a cache-busted fetch proves the ORIGIN is fine and tells you nothing about what a
+# visitor actually receives. This deploy shipped and every visitor kept getting the previous
+# week's game for exactly that reason, while a ?cb= check reported all green.
+redirect=$(curl -s --max-time 25 "$SITE/play" | grep -oE '/assets/hikmat/game\.html\?r=[A-Za-z0-9._-]+' | head -1)
+if [ -z "$redirect" ]; then
+  say fail "/play stamps a release token on the game URL (found none — visitors get the proxy's copy)"
+else
+  say pass "/play -> $redirect"
+  real=$(curl -s --max-time 40 "$SITE$redirect")
+  n=$(printf '%s' "$real" | grep -c 'testOwnsNav')
+  [ "$n" -gt 0 ] && say pass "that URL really serves the current game (level-test code present)" \
+                 || say fail "that URL serves a STALE game — no level-test code in it"
+fi
+
 echo
 echo "  $ok passed, $bad failed"
 [ "$bad" -eq 0 ] || exit 1
