@@ -3724,7 +3724,7 @@ function resumeLoc(mode){
 }
 const MODE_TITLE = m => m === "subject" ? tx("By Subject","विषय से")
                       : m === "life"   ? tx("Life Skills","जीवन कौशल")
-                      :                  tx("By Class","कक्षा से");
+                      :                  tx("By Level","स्तर से");
 // Continuing is the default, not a button: on launch she lands back on the lesson she left,
 // in the style she left it in. Runs once, AFTER the real curriculum has loaded (the bundled
 // fallback has different lesson keys, so a saved position cannot resolve against it), and
@@ -3778,8 +3778,8 @@ function renderModeHome(){
   const guest = !currentStudent;
   const heroH1 = guest ? tx("How do you want to learn? ✨","कैसे सीखना चाहोगी? ✨")
                        : tx("Welcome back, "+currentStudent.name+"! ✨","वापसी पर स्वागत है, "+currentStudent.name+"! ✨");
-  const heroP = tx("By class, by subject — or everyday life skills. Switch any time: each door remembers your place.",
-                   "कक्षा से, विषय से — या रोज़मर्रा के जीवन कौशल। कभी भी बदलो: हर दरवाज़ा तुम्हारी जगह याद रखता है।");
+  const heroP = tx("By level, by subject — or everyday life skills. Switch any time: each door remembers your place.",
+                   "स्तर से, विषय से — या रोज़मर्रा के जीवन कौशल। कभी भी बदलो: हर दरवाज़ा तुम्हारी जगह याद रखता है।");
   const s = el(`<div class="screen">
     <div class="hero hero-guide">
       <div class="roshni">${mascotSVG()}</div>
@@ -3790,7 +3790,7 @@ function renderModeHome(){
   root.appendChild(s);
   setNarration((heroH1 + ". " + heroP).replace(/✨/g, ""), (heroH1 + ". " + heroP).replace(/✨/g, ""));
   const wrap = $("#modeCards");
-  wrap.appendChild(modeCard("class", "🏫", tx("By Class","कक्षा से"),
+  wrap.appendChild(modeCard("class", "🏫", tx("By Level","स्तर से"),
     tx("Class 1–4 · 5–8 · 9–10","कक्षा 1–4 · 5–8 · 9–10"), "#f59e0b", renderHome));
   if(subjectsWithContent().length)
     wrap.appendChild(modeCard("subject", "📚", tx("By Subject","विषय से"),
