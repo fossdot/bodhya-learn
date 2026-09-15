@@ -88,20 +88,28 @@ else
 
   # The worker must be reachable at the stamped URL too, or the fix that rescues the bare
   # start_url can never reach the learners who need it.
-  swurl=$(printf '%s' "$real" | grep -oE 'sw\.js\?r=[A-Za-z0-9._-]+' | head -1)
-  if [ -z "$swurl" ]; then
-    say fail "the game registers a release-stamped sw.js (found none — the worker update can be pinned stale)"
-  else
-    sw=$(curl -s --max-time 30 --compressed -H "Accept-Encoding: $CHROME_AE" "$SITE/assets/hikmat/$swurl")
-    printf '%s' "$sw" | grep -q 'networkFirst(DOC' \
-      && say pass "sw.js?r= serves the current worker to a real browser" \
-      || say fail "sw.js?r= serves a STALE worker to a real browser"
-  fi
+  # The page registers assetURL("sw.js"), which appends ?r= AT RUNTIME — there is no literal
+  # "sw.js?r=vN" anywhere in the source, so grepping for one reports a false failure on a
+  # perfectly good deploy (it did exactly that on 2026-09-15). Check the call, then fetch the
+  # worker at the token this page was served under, which is the URL the browser will build.
+  tok=$(printf '%s' "$redirect" | grep -oE 'r=[A-Za-z0-9._-]+' | cut -d= -f2)
+  grep -q 'serviceWorker.register(assetURL("sw.js")' <<< "$real" \
+    && say pass "the game registers a release-stamped sw.js (assetURL)" \
+    || say fail "the game registers a BARE sw.js — the worker update can be pinned stale"
+  sw=$(curl -s --max-time 30 --compressed -H "Accept-Encoding: $CHROME_AE" "$SITE/assets/hikmat/sw.js?r=$tok")
+  grep -q 'networkFirst(DOC' <<< "$sw" \
+    && say pass "sw.js?r=$tok serves the current worker to a real browser" \
+    || say fail "sw.js?r=$tok serves a STALE worker to a real browser"
+
+  # and the thing a learner is actually here for
+  grep -q 'NOTHING LOCKS' <<< "$real" \
+    && say pass "the served build is the no-wall one" \
+    || say fail "the served build still has the lesson wall"
 
   # Informational: the bare URL is EXPECTED to be stale on some variants. It is survivable only
   # because the worker rewrites bare navigations — a first-ever visit on that URL still loses.
   bare=$(curl -s --max-time 40 --compressed -H "Accept-Encoding: $CHROME_AE" "$SITE/assets/hikmat/game.html")
-  printf '%s' "$bare" | grep -q 'testOwnsNav' \
+  grep -q 'testOwnsNav' <<< "$bare" \
     && echo "  note  bare game.html is currently CURRENT on this variant" \
     || echo "  note  bare game.html is STALE on this variant (expected; the service worker rewrites it — but share /play)"
 fi
