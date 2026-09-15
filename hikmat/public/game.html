@@ -2049,11 +2049,23 @@ function levelTestDue(n){
 }
 // Why a lesson is closed, or null. {kind:"level"} = above her level; {kind:"test"} = a NEW
 // lesson at her level while its test is due. Anything she has already played stays open.
+// NOTHING LOCKS. A lesson is never closed to her, at any level, for any reason.
+//
+// This used to gate on the L1-L5 ladder, and the ladder was measuring the wrong thing: a
+// lesson's level is its POSITION IN ITS TRACK (defaultLevel), never its difficulty — all 283
+// lessons match that formula and not one has ever been given a level by hand. So "Level 1" meant
+// lessons 1-2 of all 26 tracks, no track could be finished without passing four proctored
+// papers, and the 100-star quota then shut every NEW lesson at her own level. Because trackCard
+// computes allShut across a whole track, that last rule turned all 26 track cards into
+// "Take your Level 1 test first" at once, and finish() dropped the Next button — leaving a
+// timed exam she did not ask for as the only tappable thing in the app, about five lessons in.
+//
+// The test survives as an OFFER, not a wall: the 🏆 node on the trail, the L-pill sheet and the
+// button on the result screen all still appear when levelTestDue() says a paper is ready, and
+// passing still advances studentLevel(). What is gone is anything that stops her playing.
+// Kept as a function because ~8 call sites ask it, and because a future per-track structure
+// will want somewhere to put "not yet" back — see lockText, which is now unreachable.
 function lessonLock(course, ls){
-  if(lessonEarned(course.key, ls.key) > 0) return null;
-  const lv = lessonLevel(course, ls), cur = studentLevel();
-  if(lv > cur) return { kind:"level", level: lv, need: cur };
-  if(lv === cur && levelTestDue(cur)) return { kind:"test", level: cur };
   return null;
 }
 function lockText(lock){
@@ -3724,7 +3736,7 @@ function resumeLoc(mode){
 }
 const MODE_TITLE = m => m === "subject" ? tx("By Subject","विषय से")
                       : m === "life"   ? tx("Life Skills","जीवन कौशल")
-                      :                  tx("By Class","कक्षा से");
+                      :                  tx("By Level","स्तर से");
 // Continuing is the default, not a button: on launch she lands back on the lesson she left,
 // in the style she left it in. Runs once, AFTER the real curriculum has loaded (the bundled
 // fallback has different lesson keys, so a saved position cannot resolve against it), and
@@ -3778,8 +3790,8 @@ function renderModeHome(){
   const guest = !currentStudent;
   const heroH1 = guest ? tx("How do you want to learn? ✨","कैसे सीखना चाहोगी? ✨")
                        : tx("Welcome back, "+currentStudent.name+"! ✨","वापसी पर स्वागत है, "+currentStudent.name+"! ✨");
-  const heroP = tx("By class, by subject — or everyday life skills. Switch any time: each door remembers your place.",
-                   "कक्षा से, विषय से — या रोज़मर्रा के जीवन कौशल। कभी भी बदलो: हर दरवाज़ा तुम्हारी जगह याद रखता है।");
+  const heroP = tx("By level, by subject — or everyday life skills. Switch any time: each door remembers your place.",
+                   "स्तर से, विषय से — या रोज़मर्रा के जीवन कौशल। कभी भी बदलो: हर दरवाज़ा तुम्हारी जगह याद रखता है।");
   const s = el(`<div class="screen">
     <div class="hero hero-guide">
       <div class="roshni">${mascotSVG()}</div>
@@ -3790,7 +3802,7 @@ function renderModeHome(){
   root.appendChild(s);
   setNarration((heroH1 + ". " + heroP).replace(/✨/g, ""), (heroH1 + ". " + heroP).replace(/✨/g, ""));
   const wrap = $("#modeCards");
-  wrap.appendChild(modeCard("class", "🏫", tx("By Class","कक्षा से"),
+  wrap.appendChild(modeCard("class", "🏫", tx("By Level","स्तर से"),
     tx("Class 1–4 · 5–8 · 9–10","कक्षा 1–4 · 5–8 · 9–10"), "#f59e0b", renderHome));
   if(subjectsWithContent().length)
     wrap.appendChild(modeCard("subject", "📚", tx("By Subject","विषय से"),
@@ -6046,7 +6058,9 @@ function startLevel(course, lesson, lv, back){
     // A due level test is the ONE forward step now (the map would lock the next lesson anyway):
     // say so here rather than let "Next →" walk her into a locked screen.
     const dueLevel = (studentLevel() <= 5 && levelTestDue(studentLevel())) ? studentLevel() : 0;
-    const canGoOn = !dueLevel && stars >= 1 && !!(nextLv || nextLesson);
+    // A due test no longer suppresses "Next →". Both buttons show: she can carry straight on, or
+    // take the paper because she wants to. Removing the !dueLevel here is what makes it an offer.
+    const canGoOn = stars >= 1 && !!(nextLv || nextLesson);
     root.innerHTML="";
     root.appendChild(el(`<div class="screen result">
       <div class="mascot big ${stars>=2?"m-cheer":(stars>=1?"m-happy":"m-sad")}">${mascotSVG()}</div>
