@@ -6,6 +6,9 @@
 
 Signs a learner up, earns her the star quota, sits the whole 20-question paper (letting one
 question time out), and checks the promotion and the single submit_test POST that follows.
+
+It also pins the rule that replaced the old ladder wall: NOTHING LOCKS. The test still comes due,
+still appears on the trail, still promotes her — but no lesson anywhere is ever shut behind it.
 Lives in the repo because two copies of it have now been eaten by /tmp cleanup.
 """
 import json, re, sys
@@ -61,8 +64,8 @@ with sync_playwright() as p:
     page.evaluate("renderTrack(COURSES.find(c => c.key === 'eng-foundation'))"); page.wait_for_timeout(300)
     locked = page.locator("#path .step.locked").count(); total = page.locator("#path .step").count()
     print("eng-foundation steps:", total, "locked:", locked)
-    check(total == 10 and locked == 8, "only the two L1 lessons are open at level 1")
-    check("Opens at Level 2" in page.locator("#path").inner_text(), "locked node explains 'Opens at Level 2'")
+    check(total == 10 and locked == 0, "nothing is locked — the whole track is open at level 1")
+    check("Opens at Level" not in page.locator("#path").inner_text(), "no 'Opens at Level' wall on the trail")
 
     # ---------- 3. Earn 100+ stars on L1 lessons -> test becomes due ----------
     page.evaluate("""() => {
@@ -86,7 +89,13 @@ with sync_playwright() as p:
     check("Level 1 test" in ptxt and "Ready" in ptxt, "trail shows the Level 1 test node")
     other = page.evaluate("""() => { for(const c of COURSES){ if(!c.published) continue; for(const ls of c.lessons){ if(lessonLevel(c, ls)===1 && lessonEarned(c.key, ls.key)===0) return [c.key, ls.key, JSON.stringify(lessonLock(c, ls))]; } } return null; }""")
     print("unplayed L1 lesson lock:", other)
-    check(other and '"kind":"test"' in other[2], "unplayed L1 lesson is paused until the test")
+    check(other and other[2] == "null", "an unplayed lesson is NOT paused by a due test")
+    # the strong form: with a test due and the quota met, NOTHING anywhere may be shut
+    shut = page.evaluate("""() => { let n = 0;
+      COURSES.forEach(c => { if(!c.published) return; c.lessons.forEach(ls => { if(lessonLock(c, ls)) n++; }); });
+      return n; }""")
+    print("locked lessons across all 283:", shut)
+    check(shut == 0, "no lesson anywhere in the curriculum is locked")
     page.click("#levelPill", force=True); page.wait_for_selector("#lvlWrap .levelrow")
     check(page.locator("#lvlWrap .levelrow").count() == 5 and page.locator("#lvGo").count() == 1, "level sheet lists 5 levels + a Take-the-test button")
     page.click("#lvlWrap #dClose")
@@ -122,7 +131,7 @@ with sync_playwright() as p:
     page.click("#tdone"); page.wait_for_selector("#path .step")
     locked2 = page.locator("#path .step.locked").count()
     ptxt = page.locator("#path").inner_text()
-    check(locked2 == 6 and "Opens at Level 3" in ptxt and "Opens at Level 2" not in ptxt, "L2 lessons opened; L3+ still locked")
+    check(locked2 == 0 and "Opens at Level" not in ptxt, "still nothing locked after passing")
     page.wait_for_timeout(1500)
 
     # ---------- 5. Network evidence ----------
