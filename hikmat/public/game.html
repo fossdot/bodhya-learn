@@ -219,11 +219,10 @@
   .levelrow .lvright { font-weight:800; font-size:14px; white-space:nowrap; display:flex; align-items:center; gap:4px; }
   [data-theme="dark"] .levelrow .lvbadge { background:#3a2d5c; color:#d9c8ff; }
   [data-theme="dark"] .levelrow.done .lvbadge { background:#14532d; color:#bbf7d0; }
-  /* the ☰ sits in the counters row, so it has to read as one of them: same pill shell, but a
-     button, and wide enough to stay a 44px target on a phone (see the pointer:coarse rules) */
-  .pill.menubtn { cursor:pointer; font-size:19px; line-height:1; padding:5px 14px;
-                  border-color:var(--line); color:var(--muted); }
-  .pill.menubtn:active { transform:translateY(2px); }
+  /* the ☰ is the last segment of the utility cluster, beside 🔊 / theme / language, so every
+     control sits in one group (2026-11-02); the glyph is drawn larger than the text segments */
+  .toggle.menubtn { font-size:19px; line-height:1; }
+  .toggle.menubtn:active { transform:translateY(2px); }
   .toggle {
     background: #fff; border: 2px solid var(--line); color:var(--muted); cursor:pointer;
     padding: 6px 13px; border-radius: var(--r-pill); font-weight:800; font-size: 12px;
@@ -972,11 +971,22 @@
        `width:100%` forced an always-empty first row, and `flex:1 1 auto` still measured
        133-183px of sticky bar (a fifth of the screen) because back + counters + cluster +
        Help can never share 393px at 44px targets. The markup now groups counters (.stats)
-       separately from the buttons (.utils), so the wrap is deliberate: row one is the back
-       button with the counters beside it, row two is the utility cluster — two stable rows,
-       no blank row, and fmtCount()/tabular-nums stop the bar re-wrapping as she earns. */
+       separately from the buttons (.utils), so the wrap is deliberate — two stable rows, no
+       blank row, and fmtCount()/tabular-nums stop the bar re-wrapping as she earns.
+       2026-11-02: the rows were swapped round (Vishal). Every control — back, 🔊, theme,
+       language and ☰ — now shares row one, so there is one place to look for "buttons"; the
+       counters (★, 💎, L) drop to row two. Eight 44px targets can't share a 360dp row, so this
+       keeps the targets and moves the read-only counters instead. Width-only on purpose: a
+       phone held sideways (max-height match) is wide enough for the desktop single row. */
     .stats { margin-left: auto; }
-    .utils { flex: 1 1 auto; justify-content: center; }
+  }
+  @media (max-width: 560px){
+    .topbar { row-gap: 8px; }
+    .brand { order: 0; }
+    .utils { order: 1; flex: 0 0 auto; }
+    .stats { order: 2; flex: 1 1 100%; justify-content: center; margin-left: 0; }
+  }
+  @media (max-width: 560px), (max-height: 560px){
     /* A long back label (Hindi runs longer than English) truncates inside the row's real
        free space instead of a fixed 46vw; the full text stays in the aria-label. */
     .brand { flex: 1 1 auto; min-width: 0; }
@@ -1098,13 +1108,13 @@
         <span class="pill star"><span class="staricon" id="starIcon">★</span> <span id="totalStars">0</span></span>
         <span class="pill coin"><span id="coinIcon">💎</span> <span id="coins">0</span></span>
         <button class="pill level" id="levelPill" title="Level / स्तर" aria-haspopup="dialog">L1</button>
-        <button class="pill menubtn" id="menuBtn" title="Menu / मेन्यू" aria-haspopup="dialog">☰</button>
       </div>
       <div class="utils">
         <div class="utilcluster">
           <button class="toggle hearbtn" id="hearBtn" title="Listen to this screen / यह स्क्रीन सुनो">🔊</button>
           <button class="toggle" id="themeToggle" title="Light / dark">🌙</button>
           <button class="toggle" id="langToggle" title="Language / भाषा">EN</button>
+          <button class="toggle menubtn" id="menuBtn" title="Menu / मेन्यू" aria-haspopup="dialog">☰</button>
         </div>
       </div>
     </div>
