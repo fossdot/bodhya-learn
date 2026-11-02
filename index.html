@@ -1784,27 +1784,26 @@ const COACH = {
   form:   { en:"Fill the form one line at a time — pick the right answer for each line.",        hi:"फ़ॉर्म एक-एक लाइन करके भरो — हर लाइन के लिए सही जवाब चुनो।" },
 };
 
-// ---------- Accounts: on for the web, off for the Play build ----------
-// Sign-in and sign-up are ANDROID-ONLY casualties (Vishal, 2026-08-27). The web app served by
-// Frappe keeps every account door exactly as it was; the packaged Play build ships without any
-// of them, because a store app that opens with a login screen asks a child for an identity
-// before it has given her a single reason to want one.
+// ---------- Accounts: off everywhere ----------
+// Sign-in and sign-up were first cut from the packaged Play build only (Vishal, 2026-08-27),
+// because a store app that opens with a login screen asks a child for an identity before it
+// has given her a single reason to want one. On 2026-10-17 the same call was made for the web
+// build: no login, no signup, on any platform.
 //
-// This constant stays TRUE here. bundle-game.js rewrites it to false for the packaged build —
-// the same fail-loud `cut()` treatment that already makes Roshni AI and YouTube embeds
-// web-only. So "no accounts in this release" is provable by grepping the
-// shipped bundle rather than by trusting a runtime check, and the web build is untouched.
+// bundle-game.js still pins this declaration to false for the packaged build with its
+// fail-loud `cut()`, so "no accounts in this release" stays provable by grepping the shipped
+// bundle whichever value this line holds.
 //
 // Nothing is deleted either way. Every screen — renderOnlineLogin, renderOnlineSignup,
 // renderCompleteProfile, renderSignup, renderLogin, renderCampusLogin, renderProfile — and
-// every backend call behind them is still in this file and still works. Drop the cut from
-// bundle-game.js and the account doors reopen on Android exactly as they were, guest wall
-// and all.
+// every backend call behind them is still in this file and still works. Set this back to true
+// (and drop the cut from bundle-game.js for Android) and the account doors reopen exactly as
+// they were, guest wall and all.
 //
 // Where it is false the app never asks who you are: no login, no signup, no two-lesson wall,
 // no name, no class to pick. ALL progress lives on the device under one anonymous profile,
 // which is the point — the app remembers, so the child does not have to.
-const AUTH_ENABLED = true;
+const AUTH_ENABLED = false;
 
 // ---------- State / progress ----------
 // Identity: progress is stored per student so shared laptops keep girls separate.
@@ -3291,7 +3290,7 @@ function openMenu(){
         </a>
       </div>
       <div class="menulegal">
-        <a href="https://bodhya.net/bodhya-learn-privacy" target="_blank" rel="noopener">${tx("Privacy Policy","गोपनीयता नीति")}</a>
+        <a href="https://bodhya.net/bodhya-learn-privacy/" target="_blank" rel="noopener">${tx("Privacy Policy","गोपनीयता नीति")}</a>
         <span aria-hidden="true"> · </span>
         <a href="https://bodhya.net/data-deletion" target="_blank" rel="noopener">${tx("Delete my data","मेरा डेटा हटाओ")}</a>
       </div>
@@ -6702,6 +6701,7 @@ function recordAttempt(a){
   syncAttempts();
 }
 async function syncAttempts(){
+  if(!AUTH_ENABLED) return;              // accounts off → nothing is ever sent (see AUTH_ENABLED)
   if(_syncing) return;                   // serialize runs so concurrent calls can't clobber the queue
   const q = _readQueue();
   if(!q.length) return;
@@ -6739,6 +6739,7 @@ function recordTest(t, clientId){
 }
 let _syncingTests = false;
 async function syncTests(){
+  if(!AUTH_ENABLED) return;
   if(_syncingTests) return;
   const q = _readTests();
   if(!q.length) return;
@@ -6890,6 +6891,7 @@ function recordEvent(ev){
 }
 let _syncingEvents = false;
 async function syncEvents(){
+  if(!AUTH_ENABLED) return;
   if(_syncingEvents) return;
   const q = _readEvents();
   if(!q.length) return;
@@ -6991,6 +6993,7 @@ function flashToast(msg){
 }
 let _syncingDoubts = false;
 async function syncDoubts(){
+  if(!AUTH_ENABLED) return;
   if(_syncingDoubts) return;
   const q = _readDoubts();
   if(!q.length) return;
@@ -7114,6 +7117,7 @@ function _readAtt(){ try { return JSON.parse(localStorage.getItem(ATT_QUEUE)) ||
 function _saveAtt(q){ try { localStorage.setItem(ATT_QUEUE, JSON.stringify(q.slice(-400))); } catch(e){} }
 let _syncingAtt = false;
 async function syncAttendance(){
+  if(!AUTH_ENABLED) return;
   if(_syncingAtt) return;
   const q = _readAtt();
   if(!q.length) return;
@@ -7138,6 +7142,7 @@ window.addEventListener("online", syncAttendance);
 // Best-effort last-gasp ship of the newest queued ping on pagehide. The entry stays
 // queued — server-side client_id dedup makes the inevitable double-send harmless.
 function attBeacon(){
+  if(!AUTH_ENABLED) return;
   try {
     if(!("sendBeacon" in navigator) || !location.protocol.startsWith("http")) return;
     const q = _readAtt();
@@ -7178,6 +7183,7 @@ function setStudent(stu){
   attResume();                          // start the incoming student's clock (no-op for guests)
 }
 async function mergeServerProgress(){
+  if(!AUTH_ENABLED) return;
   if(!currentStudent) return;
   const res = await api("get_progress", { student: currentStudent.id, token: currentStudent.token || "" });
   const p = res && res.progress;
