@@ -34,21 +34,27 @@ and with "direct" for the second run:
   I5  three more launches change nothing at all, in storage or in memory, and her next save
       changes no number and loses no field. A launch that changes a number only in memory is
       invisible to the relaunches on a phone whose boot never saves (after Start fresh), until she
-      plays and it is written for her
+      plays and it is written for her. A next save that localStorage refused wrote nothing, so it
+      fails I5 too: the comparison after it would prove nothing
   R   the old build reads what the new one left: the same total, level and settings, every
       played lesson open, and the full curriculum
 and every launch must be free of page errors and console errors, and boot with the full curriculum.
 
-Task 2 adds four tests of a full localStorage (rule 4: guard every write), each on a fresh phone:
+Task 2 adds six tests of a full localStorage (rule 4: guard every write), each on a fresh phone:
   S1  storage_full_drops_caches   full, with the three content caches in it: a new star is still
-      kept, because the save drops those caches and writes again. Nothing else goes to make room
+      kept, because the save drops those caches and writes again. Nothing else goes to make room,
+      not even the settings cache such a phone also holds
   S2  storage_full_no_caches      full, with nothing in it that may go: save() returns false
       instead of throwing, nothing is removed, and a lesson still plays to its result screen
-  S3  retire_under_full_storage   an old signed-in account on a full phone: the account fold
-      either lands or leaves hikmat_current for the next launch, and once there is room it lands,
-      counting each attempt once
+  S3  retire_under_full_storage   an old signed-in account on a phone full to the last character,
+      with nothing that may go: the account fold cannot land, so hikmat_current stays for the next
+      launch and nothing is deleted, and once there is room the fold lands, counting each attempt once
   S4  storage_full_live_content   the S1 phone online: caching the server's lessons cannot throw,
       so the settings it sent are applied and the server counts as reached
+  S5  erase_while_fold_pending    the S3 phone, and she taps Start fresh while the fold still
+      waits: the erase ends the fold too, so no launch with room brings the account's stars back
+  S6  retire_frees_queue_room     an old signed-in account on a phone full of its own unsent queue:
+      the queue goes before the fold is written, so the fold lands in its room on the first launch
 
 Nothing here needs a server or the network. A static server serves hikmat/public/ under
 /assets/hikmat/, which is where Frappe serves it and where the Android bundle copies it, so the
@@ -254,8 +260,11 @@ BOOT_JS = r"""async (ms) => {
 
 # Her next save, the one the next game she plays makes. It writes whatever this launch holds in
 # memory, so it is the only way to see a number that boot changed in memory and never wrote.
+# `value` is what save() returned: false from a build that guards its writes means localStorage
+# refused it, so nothing was written and the comparison after it would prove nothing. v7's save
+# returns nothing at all.
 SAVE_JS = r"""() => {
-  try { save(); return { ok: true }; }
+  try { return { ok: true, value: save() }; }
   catch (e) { return { ok: false, name: String((e && e.name) || "Error"), text: String((e && e.message) || e).slice(0, 200) }; }
 }"""
 
@@ -1076,9 +1085,11 @@ def next_save(B3, B3s, saved, values=True):
     may move when it does: a change here was made at boot, in memory only, and would be written the
     moment she plays."""
     out = []
-    if not (saved or {}).get("ok"):
-        s = saved or {}
+    s = saved or {}
+    if not s.get("ok"):
         out.append("her next save threw %s" % ("%s: %s" % (s.get("name"), s.get("text")) if values else s.get("name")))
+    elif s.get("value") is False:
+        out.append("her next save was refused, so nothing was written and this check proved nothing")
     before, after = B3["stateKeys"], B3s["stateKeys"]
     for key in sorted(set(before) | set(after)):
         a, b = before.get(key), after.get(key)
@@ -1466,17 +1477,18 @@ def _keys(keys, n=3):
     return ", ".join(keys[:n]) + (" (+%d more)" % (len(keys) - n) if len(keys) > n else "")
 
 
-def _left_alone(before, after, may_go=()):
+def _left_alone(before, after, may_go=(), may_change=()):
     """Every key that was in `before` and is not a saved state or in `may_go`, removed or changed
-    in `after`. Only the three content caches may ever be removed to make room, so a filler key
-    that goes is a write that made room by throwing away something that was not its to drop."""
+    in `after`. A key in `may_change` may be rewritten, but it must still be there. Only the three
+    content caches may ever be removed to make room, so a filler key that goes is a write that
+    made room by throwing away something that was not its to drop."""
     gone, changed = [], []
     for k, v in sorted(before.items()):
         if k in may_go or k.startswith("hikmat_state_"):
             continue
         if k not in after:
             gone.append(k)
-        elif after[k] != v:
+        elif after[k] != v and k not in may_change:
             changed.append(k)
     out = []
     if gone:
@@ -1484,6 +1496,28 @@ def _left_alone(before, after, may_go=()):
     if changed:
         out.append("changed: " + _keys(changed))
     return out
+
+
+def _seeded(ph):
+    """STORAGE_JS on the phone as it was seeded, read from the seed page before any build has run.
+    A boot that makes room by deleting something has already done it by the time the game's page
+    can be asked, so only this can show what was really there."""
+    pg = ph.ctx.new_page()
+    try:
+        pg.goto(ph.env.base + SEED_PATH)
+        return pg.evaluate(STORAGE_JS)
+    finally:
+        pg.close()
+
+
+# What a phone that has been online holds besides the three content caches: the server's
+# settings, shaped as get_settings() sends them (_build_settings in hikmat/api.py). The game
+# caches them with a small write of its own, and Task 3 keeps them in localStorage, so no write may
+# drop them to make room.
+SETTINGS_CACHE = compact({"appName": "Bodhya Learn", "logo": "", "taglineEn": "Learn by playing",
+                          "taglineHi": "खेलकर सीखो", "defaultLanguage": "en", "helpDefaultOn": False,
+                          "defaultTheme": "light", "defaultSound": True, "socialLogins": [], "aiEnabled": False,
+                          "voiceEnabled": False, "otpEnabled": False})
 
 
 def _states_kept(fx, after):
@@ -1517,13 +1551,16 @@ def storage_full_drops_caches(env, sabotage=None, prelude=None):
     """S1. A phone full to the last byte, with the three content caches in it, as a phone that has
     been online for months is. She earns a new star: the save must keep it, by dropping the caches
     (the game rebuilds them from its bundled files, and from the server when it answers) and
-    writing again. Nothing else may go: every saved state and every other key stays as it was."""
+    writing again. Nothing else may go: every saved state and every other key stays as it was,
+    the settings cache such a phone also holds among them."""
     tag, code = "[%s] storage_full_drops_caches" % env.mode, "S1"
     fx = load_fixture(SAVES / "full-storage.json", "full-storage")
+    fx.local = dict(fx.local, hikmat_settings_cache=SETTINGS_CACHE)
     (ck, lk), = _fresh_lessons(fx, 1)
 
     def steps(ph, probs):
         ph.seed(fx)
+        seeded = _seeded(ph)["keys"]
         ph.launch("new")
         before = ph.page.evaluate(STORAGE_JS)
         if not before["full"]:
@@ -1545,7 +1582,8 @@ def storage_full_drops_caches(env, sabotage=None, prelude=None):
         kept = [k for k in CACHE_KEYS if k in after]
         if kept:
             probs.append("%s still in localStorage" % _keys(kept))
-        probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after, may_go=CACHE_KEYS))
+        # Against the phone as seeded, so that a key the boot already threw away counts too.
+        probs.extend(_states_kept(fx, after) + _left_alone(seeded, after, may_go=CACHE_KEYS))
 
     probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
     return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
@@ -1588,57 +1626,195 @@ def storage_full_no_caches(env, sabotage=None, prelude=None):
              % (pk, pl)))]
 
 
+ACCOUNT_KEY = "hikmat_state_S-0042"      # the retired-account fixture's signed-in learner
+
+
+def _starred(st):
+    """{path: stars} for every game with a star in one saved state."""
+    return {p: v for p, v in guarded(st).items() if p.startswith("progress.") and v > 0}
+
+
+def _fold_landed(fx, keys):
+    """What is wrong with hikmat_state_guest in `keys` (STORAGE_JS) as the retired-account fold,
+    landed: every star, gem and test result of S-0042's account and of the old guest profile, every
+    field the guest profile had, and each level test's attempts the two added once, since the guest
+    profile had never taken this fold before."""
+    acct, guest0 = fx.seed_states[ACCOUNT_KEY], fx.seed_states["hikmat_state_guest"]
+    guest = _parsed(keys.get("hikmat_state_guest"))
+    if guest is None:
+        return ["hikmat_state_guest missing"]
+    out = (lowered(acct, guest, "the guest profile, against %s," % ACCOUNT_KEY)
+           + lowered(guest0, guest, "hikmat_state_guest") + fields_lost(guest0, guest, "hikmat_state_guest"))
+    for n, rec in sorted(_dict(acct.get("levelTests")).items()):
+        want = (_num(_dict(_dict(guest0.get("levelTests")).get(n)).get("attempts")) or 0) + (_num(_dict(rec).get("attempts")) or 0)
+        got = _num(_dict(_dict(guest.get("levelTests")).get(n)).get("attempts"))
+        if got != want:
+            out.append("levelTests.%s.attempts is %s, not %s: the fold did not count each attempt once" % (n, got, want))
+    return out
+
+
+def _worth(fx):
+    """'N stars in M games' for S-0042's account, for a message."""
+    stars = _starred(fx.seed_states[ACCOUNT_KEY])
+    return "%d stars in %d games" % (sum(stars.values()), len(stars))
+
+
+def start_fresh(page):
+    """Start fresh the way she does it: ☰, My progress, then Start fresh, which asks on the same
+    button and erases on the second tap. Returns what went wrong, or ""."""
+    try:
+        page.click("#menuBtn", timeout=3000)
+        page.click("#mProg", timeout=3000)
+        page.click("#progWipe", timeout=3000)
+        page.click("#progWipe", timeout=3000)
+        page.wait_for_selector("#progWrap", state="detached", timeout=3000)
+    except PWTimeout as e:
+        return "Start fresh could not be tapped through (%s)" % _line(str(e), 120)
+    return ""
+
+
+SHOWN_JS = r"""() => ({ total: totalStars(), coins: state.coins || 0 })"""
+
+
+def _attempt_queue(student, size):
+    """An attempt queue of at least `size` characters, as recordAttempt() leaves it on a phone that
+    was signed in but offline: one record per finished game, each carrying the student's id and
+    token. Synthetic, and the token is not one."""
+    q = []
+    while len(compact(q)) < size:
+        n = len(q)
+        q.extend({"track": "bazaar", "lesson": "l%02d" % (i % 12 + 1), "activity": "learn", "stars": 3, "score": 5,
+                  "total": 5, "coins": 40, "duration_secs": 60, "student": student, "token": "e2e-not-a-token",
+                  "client_id": "e2e-%d" % i} for i in range(n, n + 100))
+    return compact(q)
+
+
 def retire_under_full_storage(env, sabotage=None, prelude=None):
-    """S3. A phone still signed in as S-0042 when accounts went off, and full. retireAccounts()
-    folds her account into the guest profile. When that write cannot land, hikmat_current has to
-    stay, so that the next launch folds again, instead of the account being dropped with its
-    stars left in a key no screen reads. Once there is room the fold must land, exactly once."""
+    """S3. A phone still signed in as S-0042 when accounts went off, full to the last character, and
+    holding nothing that may go to make room: no caches and no queues. retireAccounts() folds her
+    account into the guest profile, and on this phone that write cannot land unless something it
+    had no right to delete makes room. So hikmat_current has to stay, for the next launch to fold
+    again, instead of the account being dropped with its stars left in a key no screen reads, and
+    nothing may be removed. Once there is room the fold must land, exactly once."""
     tag, code = "[%s] retire_under_full_storage" % env.mode, "S3"
     fx = load_fixture(SAVES / "retired-account.json", "retired-account on a full phone")
     fx.fill = True
-    acct_key = "hikmat_state_S-0042"
-    acct, guest0 = fx.seed_states[acct_key], fx.seed_states["hikmat_state_guest"]
-    stars = {p: v for p, v in guarded(acct).items() if p.startswith("progress.")}
-    waited = []
+    stars = _starred(fx.seed_states[ACCOUNT_KEY])
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        seeded = _seeded(ph)["keys"]
+        ph.launch("new")
+        first = ph.page.evaluate(STORAGE_JS)["keys"]
+        if "hikmat_current" not in first:
+            have = guarded(_parsed(first.get("hikmat_state_guest")))
+            short = [p for p, v in stars.items() if have.get(p, 0) < v]
+            probs.append("hikmat_current is gone after the first launch, " + (
+                "and the guest profile lacks %d of S-0042's %d starred games: the fold was lost" % (len(short), len(stars))
+                if short else "although this phone had no room for the fold: something was deleted to make room for it"))
+        if first.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
+            probs.append("%s was changed or removed" % ACCOUNT_KEY)
+        probs.extend(_states_kept(fx, first) + _left_alone(seeded, first, may_go=CACHE_KEYS + ("hikmat_current",)))
+        # Room appears, as it does once she clears some space: the next launch must finish the fold
+        # it could not write before. The test takes only the filler, so everything else the first
+        # launch left must still be there afterwards.
+        ph.page.evaluate(DROP_FILLER_JS)
+        left = {k: v for k, v in first.items() if not k.startswith("zz_filler_")}
+        ph.launch("new")
+        then = ph.page.evaluate(STORAGE_JS)["keys"]
+        if "hikmat_current" in then:
+            probs.append("hikmat_current is still there once there was room, so the fold never landed")
+        probs.extend(_fold_landed(fx, then))
+        if then.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
+            probs.append("%s was changed or removed after the fold" % ACCOUNT_KEY)
+        probs.extend(_left_alone(left, then, may_go=CACHE_KEYS + ("hikmat_current",)))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "on the full phone the fold could not be written and nothing was deleted to make room, so hikmat_current "
+             "was kept for the next launch; once there was room the fold landed once, with all of S-0042's %s"
+             % _worth(fx)))]
+
+
+def erase_while_fold_pending(env, sabotage=None, prelude=None):
+    """S5. The S3 phone, with S-0042's fold still waiting for room, and she taps Start fresh. That
+    erases every star on this phone, the waiting fold's too, just as it would have if the fold had
+    landed first. Once there is room, no launch may land the fold and bring S-0042's stars back
+    into the profile she has just erased. The account's own key stays as it was."""
+    tag, code = "[%s] erase_while_fold_pending" % env.mode, "S5"
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account on a full phone, then Start fresh")
+    fx.fill = True
 
     def steps(ph, probs):
         ph.seed(fx)
         ph.launch("new")
-        first = ph.page.evaluate(STORAGE_JS)["keys"]
-        have = guarded(_parsed(first.get("hikmat_state_guest")))
-        short = [p for p, v in stars.items() if have.get(p, 0) < v]
-        waited.append("hikmat_current" in first)
-        if "hikmat_current" not in first and short:
-            probs.append("hikmat_current is gone and the guest profile lacks %d of S-0042's %d stars: the fold was "
-                         "lost" % (len(short), len(stars)))
-        if first.get(acct_key) != fx.local[acct_key]:
-            probs.append("%s was changed or removed" % acct_key)
-        # Room appears, as it does once the caches go or she clears space: the next launch must
-        # finish the fold it could not write before.
+        if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
+            probs.append("hikmat_current was not kept on the full phone, so no fold was waiting and the erase proved nothing")
+            return
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        erased = ph.page.evaluate(STORAGE_JS)["keys"]
+        guest = _parsed(erased.get("hikmat_state_guest"))
+        if guest is None or _starred(guest) or _num(guest.get("coins")):
+            probs.append("Start fresh did not reach storage: hikmat_state_guest still holds stars or gems")
+        if "hikmat_current" in erased:
+            probs.append("hikmat_current is still there after Start fresh")
         ph.page.evaluate(DROP_FILLER_JS)
-        ph.launch("new")
+        left = {k: v for k, v in erased.items() if not k.startswith("zz_filler_")}
+        for which in ("the first launch with room", "the launch after it"):
+            ph.launch("new")
+            shown = ph.page.evaluate(SHOWN_JS)
+            if shown["total"] or shown["coins"]:
+                probs.append("%s shows %s stars and %s gems: the waiting fold landed in the profile she had erased"
+                             % (which, shown["total"], shown["coins"]))
+                break
         then = ph.page.evaluate(STORAGE_JS)["keys"]
-        guest = _parsed(then.get("hikmat_state_guest"))
-        if "hikmat_current" in then:
-            probs.append("hikmat_current is still there once there was room, so the fold never landed")
-        if guest is None:
-            probs.append("hikmat_state_guest missing once there was room")
-        else:
-            probs.extend(lowered(acct, guest, "the guest profile, against %s," % acct_key)
-                         + lowered(guest0, guest, "hikmat_state_guest") + fields_lost(guest0, guest, "hikmat_state_guest"))
-            for n, rec in sorted(_dict(acct.get("levelTests")).items()):
-                want = (_num(_dict(_dict(guest0.get("levelTests")).get(n)).get("attempts")) or 0) + (_num(_dict(rec).get("attempts")) or 0)
-                got = _num(_dict(_dict(guest.get("levelTests")).get(n)).get("attempts"))
-                if got != want:
-                    probs.append("levelTests.%s.attempts is %s, not %s: the fold counted an attempt twice" % (n, got, want))
-        if then.get(acct_key) != fx.local[acct_key]:
-            probs.append("%s was changed or removed after the fold" % acct_key)
+        if then.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
+            probs.append("%s was changed or removed" % ACCOUNT_KEY)
+        probs.extend(_left_alone(left, then, may_go=CACHE_KEYS + ("hikmat_current",)))
 
     probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
     return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
-             "%s, and once there was room it had landed once, with all %d of S-0042's stars"
-             % ("on the full phone the fold could not be written, so hikmat_current was kept for the next launch"
-                if waited and waited[0] else "the fold fitted even on the full phone", len(stars))))]
+             "Start fresh while S-0042's fold waited for room ended the fold too: two launches with room show 0 stars "
+             "and 0 gems, and %s is untouched" % ACCOUNT_KEY))]
+
+
+def retire_frees_queue_room(env, sabotage=None, prelude=None):
+    """S6. A phone that stayed signed in as S-0042 through a long time offline, full of its own
+    unsent attempt queue, and with no caches. retireAccounts() deletes that queue whatever happens,
+    because it can never be sent, and it has to do so before it writes the fold. Then the fold lands
+    in the room the queue held, on the first launch, and she never sees her progress without
+    S-0042's stars. Nothing but the queue and hikmat_current may go."""
+    tag, code = "[%s] retire_frees_queue_room" % env.mode, "S6"
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account, full of its own unsent queue")
+    fx.local = dict(fx.local, hikmat_attempt_queue=_attempt_queue("S-0042", 3 * len(fx.local[ACCOUNT_KEY])))
+    fx.fill = True
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        seeded = _seeded(ph)
+        if not seeded["full"]:
+            probs.append("the phone was not full before the launch, so the launch proved nothing")
+        ph.launch("new")
+        first = ph.page.evaluate(STORAGE_JS)["keys"]
+        if "hikmat_current" in first:
+            probs.append("hikmat_current is still there after the first launch: the fold was written before the queue's "
+                         "room was freed, so she plays this launch without S-0042's stars")
+        else:
+            probs.extend(_fold_landed(fx, first))
+        if "hikmat_attempt_queue" in first:
+            probs.append("the attempt queue, which can never be sent, is still there")
+        if first.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
+            probs.append("%s was changed or removed" % ACCOUNT_KEY)
+        probs.extend(_states_kept(fx, first) + _left_alone(seeded["keys"], first,
+                                                           may_go=CACHE_KEYS + ("hikmat_current", "hikmat_attempt_queue")))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "the fold landed on the first launch, in the room the unsent queue held, with all of S-0042's %s, and "
+             "nothing but the queue and hikmat_current was removed" % _worth(fx)))]
 
 
 LIVE_TAGLINE = "e2e: the tagline the server sent"
@@ -1654,16 +1830,12 @@ def storage_full_live_content(env, sabotage=None, prelude=None):
     content caches, and nothing else."""
     tag, code = "[%s] storage_full_live_content" % env.mode, "S4"
     fx = load_fixture(SAVES / "full-storage.json", "full-storage, online")
+    fx.local = dict(fx.local, hikmat_settings_cache=SETTINGS_CACHE)
     live = [dict(c, e2eLive=True) for c in CURRICULUM]
 
     def steps(ph, probs):
         ph.seed(fx)
-        pg = ph.ctx.new_page()
-        try:
-            pg.goto(env.base + SEED_PATH)
-            before = pg.evaluate(STORAGE_JS)
-        finally:
-            pg.close()
+        before = _seeded(ph)
         if not before["full"]:
             probs.append("the phone was not full before the launch, so the launch proved nothing")
         ph.answer(r"^/api/method/hikmat\.api\.get_courses$", status=200, content_type="application/json",
@@ -1679,7 +1851,10 @@ def storage_full_live_content(env, sabotage=None, prelude=None):
         if r["tagline"] != LIVE_TAGLINE:
             probs.append("the settings the server sent were never applied")
         after = ph.page.evaluate(STORAGE_JS)["keys"]
-        probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after, may_go=CACHE_KEYS))
+        # The settings cache may change, since the server has just sent new settings, but it must
+        # still be there: it is not one of the caches a write may drop to make room.
+        probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after, may_go=CACHE_KEYS,
+                                                           may_change=("hikmat_settings_cache",)))
 
     probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
     return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
@@ -1708,6 +1883,18 @@ def t_retire_under_full_storage(env, report):
 @test("storage_full_live_content")
 def t_storage_full_live_content(env, report):
     for _code, ok, msg in storage_full_live_content(env):
+        report.check(ok, msg)
+
+
+@test("erase_while_fold_pending")
+def t_erase_while_fold_pending(env, report):
+    for _code, ok, msg in erase_while_fold_pending(env):
+        report.check(ok, msg)
+
+
+@test("retire_frees_queue_room")
+def t_retire_frees_queue_room(env, report):
+    for _code, ok, msg in retire_frees_queue_room(env):
         report.check(ok, msg)
 
 
@@ -1755,6 +1942,28 @@ BARE_CACHE_WRITE = _sab("the lessons cache is written with a bare setItem again"
 # swallowed the error and dropped hikmat_current as though the account were safely folded in.
 SILENT_SETITEM = ("/* e2e self-test: a refused write looks like one that landed */(function(){var s=Storage.prototype.setItem;"
                   "Storage.prototype.setItem=function(){try{return s.apply(this,arguments);}catch(e){}};})();")
+# GREEDY_WRITE one level down, at Storage itself, and before the game's scripts: a refused write
+# deletes every key that is not a saved state and tries again. Only this reaches the account fold,
+# which retireAccounts() writes before any script appended at the end of the page has run.
+GREEDY_STORAGE = ("/* e2e self-test: a refused write makes room by deleting other keys */(function(){"
+                  "var s=Storage.prototype.setItem,r=Storage.prototype.removeItem;"
+                  "Storage.prototype.setItem=function(k){try{return s.apply(this,arguments);}catch(e){"
+                  "for(var i=this.length-1;i>=0;i--){var x=this.key(i);if(x&&x.indexOf('hikmat_state_')!==0&&x!==k)r.call(this,x);}"
+                  "return s.apply(this,arguments);}};})();")
+# Start fresh as it was before it ended a waiting account fold: hikmat_current stays, and the
+# first launch with room lands the fold in the profile she has just erased. retireAccounts() keeps
+# the real endAccountFold(), because it runs before this script does.
+KEEP_WAITING_FOLD = _sab("Start fresh leaves a waiting account fold in place", "endAccountFold=function(){};")
+# retireAccounts() in its old order: the unsendable queues and the social marker go only after the
+# fold has been tried, so the fold cannot use the room they held.
+LATE_QUEUE_DROP = ("/* e2e self-test: the queues go after the fold */(function(){var r=Storage.prototype.removeItem;"
+                   "Storage.prototype.removeItem=function(k){var me=this;"
+                   "if(/_queue$|^hikmat_social_pending$/.test(String(k))){setTimeout(function(){r.call(me,k);},0);return;}"
+                   "return r.apply(this,arguments);};})();")
+# dropContentCaches() takes the settings cache too, which is not one of the three it may drop.
+DROP_SETTINGS_TOO = _sab("making room also drops the settings cache",
+                         "var real=dropContentCaches;dropContentCaches=function(){real();"
+                         "localStorage.removeItem('hikmat_settings_cache');};")
 
 
 def _private_output_problems():
@@ -1793,7 +2002,7 @@ def _private_output_problems():
 @test("self-test", once=True)
 def t_self_test(env, report):
     """The checks must be able to fail, each on its own. Broken builds go through the same update
-    as the fixtures, or onto the same full phone as S1-S4, and each must fail exactly the check it
+    as the fixtures, or onto the same full phone as S1-S6, and each must fail exactly the check it
     breaks, naming what it broke. A build that is slow but correct must still pass, and a private
     save's output must carry nothing of hers."""
     tag = "[%s] self-test" % env.mode
@@ -1809,7 +2018,10 @@ def t_self_test(env, report):
         for msg in failed.values():
             print("    caught: " + msg)
         ok = set(failed) == set(codes) and all(text in failed.get(code, "") for code, text in named)
-        said = ("fails %s and nothing else, naming %s" % (" and ".join(codes), ", ".join(t for _c, t in named))
+        # "and nothing else" only when other checks ran on the same phone. A full-phone test is a
+        # single check, and saying it of one would claim something that was never looked at.
+        alone = " and nothing else" if len(res) > len(codes) else ""
+        said = ("fails %s%s, naming %s" % (" and ".join(codes), alone, ", ".join(t for _c, t in named))
                 if codes else "passes every check, because nothing was lost")
         report.check(ok, "%s %s %s%s" % (tag, what, said, "" if ok else " (failed: %s)" % (", ".join(sorted(failed)) or "nothing")))
 
@@ -1843,15 +2055,29 @@ def t_self_test(env, report):
            script=_sab("what v7 left is lowered", "state.coins=0;state.levelTests={};state.testSeen={};save();"))
     expect("hikmat_current kept after the new build's fold", load_fixture(SAVES / "retired-account.json", "retired-account (sabotaged)"),
            ["direct I5"], [("direct I5", "levelTests.1.attempts")], prelude=KEEP_CURRENT, direct=True)
+    # A full phone with nothing to drop refuses her next save, so a number boot changed only in
+    # memory never reaches storage, and I5 must say that its comparison proved nothing.
+    full = load_fixture(SAVES / "full-storage.json", "full-storage without caches (sabotaged)")
+    full.with_caches = False
+    expect("gems added in memory only, on a full phone that refuses her next save", full, ["I5"],
+           [("I5", "her next save was refused")], script=_sab("gems grow in memory only", "state.coins+=100000;"))
     expect("content that arrives 700 ms late", mid, [], [], prelude=SLOW_FETCH)
     judged("a save that lets a full phone's error escape, as v7's did", storage_full_drops_caches(env, sabotage=V7_SAVE),
            ["S1"], [("S1", "QuotaExceededError")])
+    judged("a write that makes room by dropping the settings cache too", storage_full_drops_caches(env, sabotage=DROP_SETTINGS_TOO),
+           ["S1"], [("S1", "removed to make room: hikmat_settings_cache")])
     judged("a write that makes room by dropping keys that are not caches", storage_full_no_caches(env, sabotage=GREEDY_WRITE),
            ["S2"], [("S2", "removed to make room")])
     judged("a refused write that looks as if it landed", retire_under_full_storage(env, prelude=SILENT_SETITEM),
            ["S3"], [("S3", "hikmat_current")])
+    judged("an account fold that makes room by deleting other keys", retire_under_full_storage(env, prelude=GREEDY_STORAGE),
+           ["S3"], [("S3", "removed to make room")])
     judged("a lessons cache written with a bare setItem again", storage_full_live_content(env, sabotage=BARE_CACHE_WRITE),
            ["S4"], [("S4", "backendLive")])
+    judged("Start fresh that leaves a waiting account fold in place", erase_while_fold_pending(env, sabotage=KEEP_WAITING_FOLD),
+           ["S5"], [("S5", "waiting fold landed")])
+    judged("an account fold tried before the unsendable queues are gone", retire_frees_queue_room(env, prelude=LATE_QUEUE_DROP),
+           ["S6"], [("S6", "hikmat_current is still there")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------

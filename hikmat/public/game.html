@@ -1928,8 +1928,11 @@ function mergeSavedState(into, from){
 }
 
 // A device that was signed in when accounts were switched off must not look wiped on the next
-// launch. This runs ONCE, before any state is loaded, and folds the signed-in learner's progress
-// into the anonymous device profile she is about to become.
+// launch. This runs before any state is loaded, and folds the signed-in learner's progress into
+// the anonymous device profile she is about to become. The fold lands on the first launch unless
+// storage is too full for it even after the caches and the queues below have gone. Then
+// hikmat_current stays and every later launch tries again. Until one has room she plays as the
+// device profile without the account's stars, which wait untouched in the account's own key.
 //
 // Her old `hikmat_state_<id>` key is deliberately left where it is. Nothing here destroys a
 // star: if accounts ever come back, logging in finds every one of them exactly where she left
@@ -1945,9 +1948,24 @@ function mergeSavedState(into, from){
 //     not sit on a shared phone forever. This mirrors the Boli cleanup at the bottom of the file.
 function retireAccounts(){
   if(AUTH_ENABLED) return;
-  const drop = ["hikmat_social_pending",
-                "hikmat_attempt_queue", "hikmat_test_queue", "hikmat_event_queue",
-                "hikmat_doubt_queue", "hikmat_att_queue"];
+  // These go before the fold is written, so the room they held is there for it. A phone that
+  // stayed signed in through months offline can be full of its own unsent queues, and a fold
+  // tried first fails for want of the room this function frees a moment later. They go whether
+  // or not there is an account to fold, so going first removes nothing that used to stay.
+  ["hikmat_social_pending",
+   "hikmat_attempt_queue", "hikmat_test_queue", "hikmat_event_queue",
+   "hikmat_doubt_queue", "hikmat_att_queue"].forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+  // Campus-roster keys by prefix rather than by name: the two constants that used to name them
+  // (CAMPUS_ROSTER_KEY / DEVICE_MODE_KEY) are no longer defined anywhere in this file, so an
+  // older build's roster can only be found by looking for it.
+  try {
+    const kill = [];
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && /^hikmat_(campus|roster|device_mode)/.test(k)) kill.push(k);
+    }
+    kill.forEach(k => localStorage.removeItem(k));
+  } catch(e){}
   if(currentStudent){
     let mine = null, device = null;
     try { mine = JSON.parse(localStorage.getItem(stateKeyFor(currentStudent.id))); } catch(e){}
@@ -1962,24 +1980,24 @@ function retireAccounts(){
     // repeat: the guest profile never took this fold, so the next one counts each attempt once.
     // Dropping hikmat_current after a write that failed, as this used to do without knowing,
     // left her account's stars in a key that no screen reads.
-    if(writeLocal(stateKeyFor(null), JSON.stringify(merged))) drop.push("hikmat_current");
+    if(writeLocal(stateKeyFor(null), JSON.stringify(merged))) endAccountFold();
     // This launch runs as the device profile either way. With accounts off there is no other
     // identity: an account left in memory would load and save that account's own key, and
-    // refill the token-signed queues this function is about to empty.
+    // refill the token-signed queues this function has just emptied. Nor does it run on `merged`
+    // while the fold waits. Every save would then be as large as the fold that did not fit, and
+    // on a phone with a little room left the stars she earns now would not be kept.
     currentStudent = null;
   }
-  drop.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
-  // Campus-roster keys by prefix rather than by name: the two constants that used to name them
-  // (CAMPUS_ROSTER_KEY / DEVICE_MODE_KEY) are no longer defined anywhere in this file, so an
-  // older build's roster can only be found by looking for it.
-  try {
-    const kill = [];
-    for(let i = 0; i < localStorage.length; i++){
-      const k = localStorage.key(i);
-      if(k && /^hikmat_(campus|roster|device_mode)/.test(k)) kill.push(k);
-    }
-    kill.forEach(k => localStorage.removeItem(k));
-  } catch(e){}
+}
+// The one place hikmat_current goes while accounts are off. While it is there, the fold above
+// has not landed. It goes once the fold lands, and also when she erases her progress first: the
+// erase covers the stars the fold would bring, just as it would if the fold had landed before
+// it. Left waiting, the fold would land on the next launch with room, inside the profile she has
+// just erased. The account's own key stays either way. With accounts on, hikmat_current is
+// whoever is signed in, and erasing her progress must not sign her out.
+function endAccountFold(){
+  if(AUTH_ENABLED) return;
+  try { localStorage.removeItem("hikmat_current"); } catch(e){}
 }
 retireAccounts();          // before loadState(): it decides WHICH state we are about to load
 
@@ -3711,6 +3729,8 @@ function openProgressSheet(){
                    gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
     state = Object.assign(fresh(), keep);
     save();
+    // "Every star on this phone" includes an account fold still waiting for room.
+    endAccountFold();
     sfx.back(); close(); renderHome();
     srSay(tx("Progress erased.","प्रगति मिटा दी गई।"));
   };
@@ -6717,7 +6737,11 @@ async function loadFromBackend(){
         dropLevelCache();                       // new content → new per-level rollups
         // Through writeLocal(), because a bare setItem threw on a full phone, and that throw
         // skipped the structure and settings below and reported a server that had answered as
-        // unreachable. writeLocal() makes room only by dropping the content caches themselves.
+        // unreachable. writeLocal() makes room only by dropping the content caches themselves,
+        // so on a full phone this write also drops the structure and test-bank caches, even a
+        // bank loadTestBank() has only just fetched. That costs her nothing she has earned:
+        // offline the bands fall back to the defaults at the top of this file and the bank to
+        // testbank.json, and the next answer from the server caches both again.
         writeLocal(CACHE_KEY, JSON.stringify(COURSES));
       }
     }
