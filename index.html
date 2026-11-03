@@ -1852,7 +1852,44 @@ function loadState(){
 // Declared here, ABOVE its first caller: save() drops this cache, and a `let` further down the
 // file would leave it in the temporal dead zone for any save() during boot.
 let _lvCache = {};        // per-level rollup memo — see dropLevelCache / levelStars / levelPool
-function save(){ dropLevelCache(); localStorage.setItem(stateKey(), JSON.stringify(state)); }
+
+// Rule 4 of docs/progress-logic.md: guard every write. A full localStorage makes setItem throw,
+// and a save that throws keeps nothing. The stars of the game she has just finished are gone,
+// and the game stops wherever the throw left it. Her progress shares this storage with three
+// content caches, and all three can be rebuilt: the lessons and the test bank from the bundled
+// curriculum.json and testbank.json, the grade bands from the defaults at the top of this file,
+// and all of them from the server whenever it answers. So when a write does not fit, the caches
+// go and the write is tried once more. Nothing else is ever removed to make room: not a saved
+// state, not a setting, and not a key this build does not know.
+function writeLocal(key, json){
+  try { localStorage.setItem(key, json); return true; } catch(e){}
+  // Any throw counts as full. Chromium calls it QuotaExceededError, other engines name it their
+  // own way, and whatever the reason, the room the caches hold is the only room there is to try.
+  dropContentCaches();
+  try { localStorage.setItem(key, json); return true; } catch(e){ return false; }
+}
+// The three cache keys are spelled out here rather than read from CACHE_KEY, STRUCT_KEY and
+// TESTBANK_KEY. retireAccounts() writes through writeLocal() before those constants are declared
+// further down this file, and reading a const before its declaration throws.
+function dropContentCaches(){
+  ["hikmat_courses_cache", "hikmat_structure_cache", "hikmat_testbank_cache"].forEach(k => {
+    try { localStorage.removeItem(k); } catch(e){}
+  });
+}
+// Rule 6 keeps a second copy of every save outside the WebView. That copy does not exist yet in
+// this build, so this does nothing. save() still calls it for every save, the refused ones too,
+// because on a full phone the second copy is the only place a refused save can still go.
+function mirrorState(key, json){}
+// Returns true when localStorage kept it. A false save is not an error she ever sees: the state
+// in memory still holds everything, the game carries on, and the next save that fits writes all
+// of it, since every save writes her whole state.
+function save(){
+  dropLevelCache();
+  const key = stateKey(), json = JSON.stringify(state);
+  const kept = writeLocal(key, json);
+  mirrorState(key, json);
+  return kept;
+}
 
 // Fold one saved state into another, taking the BETTER of each value — never the newer one.
 // Stars and gems only ever go up in this game, and a merge that could lower either would be a
@@ -1920,9 +1957,16 @@ function retireAccounts(){
     // across, or she is greeted by a different friend on the first launch after the update.
     if(!merged.gender && currentStudent.gender) merged.gender = currentStudent.gender;
     if(!merged.mascot && currentStudent.mascot) merged.mascot = currentStudent.mascot;
-    try { localStorage.setItem(stateKeyFor(null), JSON.stringify(merged)); } catch(e){}
+    // The fold is her progress, so it goes through writeLocal() like every save. If even that
+    // cannot make room, hikmat_current stays, and the next launch folds again. That is safe to
+    // repeat: the guest profile never took this fold, so the next one counts each attempt once.
+    // Dropping hikmat_current after a write that failed, as this used to do without knowing,
+    // left her account's stars in a key that no screen reads.
+    if(writeLocal(stateKeyFor(null), JSON.stringify(merged))) drop.push("hikmat_current");
+    // This launch runs as the device profile either way. With accounts off there is no other
+    // identity: an account left in memory would load and save that account's own key, and
+    // refill the token-signed queues this function is about to empty.
     currentStudent = null;
-    drop.push("hikmat_current");
   }
   drop.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
   // Campus-roster keys by prefix rather than by name: the two constants that used to name them
@@ -6671,7 +6715,10 @@ async function loadFromBackend(){
       if(j && Array.isArray(j.message) && j.message.length){
         COURSES = j.message;
         dropLevelCache();                       // new content → new per-level rollups
-        localStorage.setItem(CACHE_KEY, JSON.stringify(COURSES));
+        // Through writeLocal(), because a bare setItem threw on a full phone, and that throw
+        // skipped the structure and settings below and reported a server that had answered as
+        // unreachable. writeLocal() makes room only by dropping the content caches themselves.
+        writeLocal(CACHE_KEY, JSON.stringify(COURSES));
       }
     }
     if(xr.ok){

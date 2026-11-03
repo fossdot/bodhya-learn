@@ -39,6 +39,17 @@ and with "direct" for the second run:
       played lesson open, and the full curriculum
 and every launch must be free of page errors and console errors, and boot with the full curriculum.
 
+Task 2 adds four tests of a full localStorage (rule 4: guard every write), each on a fresh phone:
+  S1  storage_full_drops_caches   full, with the three content caches in it: a new star is still
+      kept, because the save drops those caches and writes again. Nothing else goes to make room
+  S2  storage_full_no_caches      full, with nothing in it that may go: save() returns false
+      instead of throwing, nothing is removed, and a lesson still plays to its result screen
+  S3  retire_under_full_storage   an old signed-in account on a full phone: the account fold
+      either lands or leaves hikmat_current for the next launch, and once there is room it lands,
+      counting each attempt once
+  S4  storage_full_live_content   the S1 phone online: caching the server's lessons cannot throw,
+      so the settings it sent are applied and the server counts as reached
+
 Nothing here needs a server or the network. A static server serves hikmat/public/ under
 /assets/hikmat/, which is where Frappe serves it and where the Android bundle copies it, so the
 game's absolute asset paths resolve unchanged. The old build is answered from git, and every request
@@ -1345,6 +1356,361 @@ def t_harness(env, report):
         ph.close()
 
 
+# ---------------------------------------------------------------- a full phone (Task 2) -------
+#
+# Rule 4: a full localStorage must never cost her a star. Each test below fills a phone and
+# returns [(code, ok, message)] instead of printing, so that the self-test can run it on a broken
+# build and see it fail.
+
+# What a full phone holds, read from storage itself and not through the game: the raw value of
+# every saved state and of hikmat_current, and the length of everything else. A full phone holds
+# megabytes of filler and cache, and these tests only need to know that those keys are still
+# there at the same size. `full` says whether even one more short key would fit.
+STORAGE_JS = r"""() => {
+  const keys = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i), v = localStorage.getItem(k);
+    keys[k] = (k.indexOf("hikmat_state_") === 0 || k === "hikmat_current") ? v : v.length;
+  }
+  let full = false;
+  try { localStorage.setItem("zz_probe_full", "z"); localStorage.removeItem("zz_probe_full"); } catch (e) { full = true; }
+  return { keys, full };
+}"""
+
+# A star she has never had, then her save, which is what finish() does at the end of a game. On a
+# full phone the new star makes her saved state longer, so the write fits only if something makes
+# room for it.
+STAR_SAVE_JS = r"""([ck, lk]) => {
+  setStars(ck, lk, "learn", 3);
+  try { return { ok: true, value: save() }; }
+  catch (e) { return { ok: false, name: String((e && e.name) || "Error"), text: String((e && e.message) || e).slice(0, 200) }; }
+}"""
+
+# Her tap on a lesson in its track: the lesson's map, with its first game ready to start.
+OPEN_LESSON_JS = r"""([ck, lk]) => {
+  const c = COURSES.find(x => x.key === ck), ls = c && (c.lessons || []).find(l => l.key === lk);
+  if (!ls) return "the curriculum has no lesson " + ck + "/" + lk;
+  try { renderLessonMap(c, ls); return ""; }
+  catch (e) { return "opening the lesson threw " + String((e && e.name) || "Error") + ": " + String((e && e.message) || e).slice(0, 160); }
+}"""
+
+RESULT_JS = r"""() => { const r = document.querySelector(".screen.result .earn"); return r ? r.textContent.trim() : null; }"""
+
+DROP_FILLER_JS = r"""() => {
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf("zz_filler_") === 0) localStorage.removeItem(k);
+  }
+}"""
+
+
+def _fresh_lessons(fx, n):
+    """The first n published lessons, in curriculum order, that have a Learn game (they have
+    words) and that the fixture's guest state has never played. A star there is new, so saving it
+    makes her state longer."""
+    prog = _dict(_dict(fx.seed_states.get("hikmat_state_guest")).get("progress"))
+    out = []
+    for c in CURRICULUM:
+        if not c.get("published"):
+            continue
+        for ls in c.get("lessons") or []:
+            if ls.get("words") and not _dict(prog.get(c.get("key"))).get(ls.get("key")):
+                out.append((c["key"], ls["key"]))
+                if len(out) == n:
+                    return out
+    raise RuntimeError("the curriculum has fewer than %d lessons with words that %s has not played" % (n, fx.name))
+
+
+def _parsed(raw):
+    """A stored state as the game would parse it, or None when it is missing or unreadable."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        v = json.loads(raw)
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def _learn_star(st, ck, lk):
+    return _num(_dict(_dict(_dict(_dict(st).get("progress")).get(ck)).get(lk)).get("learn")) or 0
+
+
+def play_learn(page, ck, lk, taps=12):
+    """Play the Learn game of one lesson, from her tap on the lesson to the result screen, with
+    the game's own buttons. Returns what went wrong, or "" when the result screen came up with
+    three stars. A save that throws inside a tap handler shows up twice: as a page error, and as a
+    game that never reaches its result screen, because the throw stops the round where it is."""
+    err = page.evaluate(OPEN_LESSON_JS, [ck, lk])
+    if err:
+        return err
+    try:
+        page.click("#path .step.current .node", timeout=3000)
+        for _ in range(taps):
+            if page.locator(".screen.result").count():
+                break
+            page.click("#go" if page.locator("#go").count() else "#footer #next", timeout=3000)
+    except PWTimeout as e:
+        return "the game stopped answering her taps (%s)" % _line(str(e), 120)
+    shown = page.evaluate(RESULT_JS)
+    if shown is None:
+        return "the game never reached its result screen"
+    if shown != "★★★":
+        return "the result screen shows %s, not three stars" % shown
+    return ""
+
+
+def _keys(keys, n=3):
+    """A short list of storage keys for a message."""
+    keys = list(keys)
+    return ", ".join(keys[:n]) + (" (+%d more)" % (len(keys) - n) if len(keys) > n else "")
+
+
+def _left_alone(before, after, may_go=()):
+    """Every key that was in `before` and is not a saved state or in `may_go`, removed or changed
+    in `after`. Only the three content caches may ever be removed to make room, so a filler key
+    that goes is a write that made room by throwing away something that was not its to drop."""
+    gone, changed = [], []
+    for k, v in sorted(before.items()):
+        if k in may_go or k.startswith("hikmat_state_"):
+            continue
+        if k not in after:
+            gone.append(k)
+        elif after[k] != v:
+            changed.append(k)
+    out = []
+    if gone:
+        out.append("removed to make room: " + _keys(gone))
+    if changed:
+        out.append("changed: " + _keys(changed))
+    return out
+
+
+def _states_kept(fx, after):
+    """Every saved state the fixture seeded is still in `after`, with nothing in it lowered or lost."""
+    out = []
+    for key, ref in sorted(fx.seed_states.items()):
+        got = _parsed(after.get(key))
+        if got is None:
+            out.append("%s missing" % key)
+        elif isinstance(ref, dict):
+            out += lowered(ref, got, key) + fields_lost(ref, got, key)
+    return out
+
+
+def _full_phone_run(ph, steps):
+    """Run `steps(ph, probs)` on a phone and gather what it found, its crash and the page's errors
+    into one list. A crash fails this one check and not the whole run, so the self-test can see it."""
+    probs = []
+    try:
+        steps(ph, probs)
+        if ph.errors:
+            probs.append(_clip(ph.errors, 3))
+    except Exception as e:
+        probs.append("crashed: %s" % FlowError(e, ph.errors, False))
+    finally:
+        ph.close()
+    return probs
+
+
+def storage_full_drops_caches(env, sabotage=None, prelude=None):
+    """S1. A phone full to the last byte, with the three content caches in it, as a phone that has
+    been online for months is. She earns a new star: the save must keep it, by dropping the caches
+    (the game rebuilds them from its bundled files, and from the server when it answers) and
+    writing again. Nothing else may go: every saved state and every other key stays as it was."""
+    tag, code = "[%s] storage_full_drops_caches" % env.mode, "S1"
+    fx = load_fixture(SAVES / "full-storage.json", "full-storage")
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        before = ph.page.evaluate(STORAGE_JS)
+        if not before["full"]:
+            probs.append("the phone was not full before the save, so the save proved nothing")
+        absent = [k for k in CACHE_KEYS if k not in before["keys"]]
+        if absent:
+            probs.append("%s not in storage before the save, so there was nothing to drop" % _keys(absent))
+        r = ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        if not r["ok"]:
+            probs.append("save() threw %s: %s" % (r["name"], _line(r["text"], 120)))
+        elif r["value"] is not True:
+            probs.append("save() returned %s, not true" % json.dumps(r["value"]))
+        ph.launch("new")
+        after = ph.page.evaluate(STORAGE_JS)["keys"]
+        if _learn_star(_parsed(after.get("hikmat_state_guest")), ck, lk) != 3:
+            probs.append("after a reload the star at %s/%s/learn is not in hikmat_state_guest" % (ck, lk))
+        if ph.page.evaluate("([ck, lk]) => getStars(ck, lk, 'learn')", [ck, lk]) != 3:
+            probs.append("after a reload the game does not show the star at %s/%s/learn" % (ck, lk))
+        kept = [k for k in CACHE_KEYS if k in after]
+        if kept:
+            probs.append("%s still in localStorage" % _keys(kept))
+        probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after, may_go=CACHE_KEYS))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "the new star at %s/%s survived a reload: the save dropped the three content caches and nothing else, "
+             "and every saved state is intact" % (ck, lk)))]
+
+
+def storage_full_no_caches(env, sabotage=None, prelude=None):
+    """S2. Full, with nothing in storage that may go: her own state and filler, no caches. The save
+    cannot be kept, and it must say so by returning false instead of throwing, and she must still
+    be able to play. A throw here stops the game she is in: the star she is earning is lost, and
+    so is every one after it until the app is closed."""
+    tag, code = "[%s] storage_full_no_caches" % env.mode, "S2"
+    fx = load_fixture(SAVES / "full-storage.json", "full-storage without caches")
+    fx.with_caches = False
+    (ck, lk), (pk, pl) = _fresh_lessons(fx, 2)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        before = ph.page.evaluate(STORAGE_JS)
+        if not before["full"]:
+            probs.append("the phone was not full before the save, so the save proved nothing")
+        r = ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        if not r["ok"]:
+            probs.append("save() threw %s: %s" % (r["name"], _line(r["text"], 120)))
+        elif r["value"] is not False:
+            probs.append("save() returned %s, not false, with nothing it may drop" % json.dumps(r["value"]))
+        why = play_learn(ph.page, pk, pl)
+        if why:
+            probs.append("the lesson %s/%s did not play: %s" % (pk, pl, why))
+        elif ph.page.evaluate("([ck, lk]) => getStars(ck, lk, 'learn')", [pk, pl]) != 3:
+            probs.append("the three stars she just earned at %s/%s are not in the game's state" % (pk, pl))
+        after = ph.page.evaluate(STORAGE_JS)["keys"]
+        probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "save() returned false without throwing, nothing was removed, and %s/%s played to three stars"
+             % (pk, pl)))]
+
+
+def retire_under_full_storage(env, sabotage=None, prelude=None):
+    """S3. A phone still signed in as S-0042 when accounts went off, and full. retireAccounts()
+    folds her account into the guest profile. When that write cannot land, hikmat_current has to
+    stay, so that the next launch folds again, instead of the account being dropped with its
+    stars left in a key no screen reads. Once there is room the fold must land, exactly once."""
+    tag, code = "[%s] retire_under_full_storage" % env.mode, "S3"
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account on a full phone")
+    fx.fill = True
+    acct_key = "hikmat_state_S-0042"
+    acct, guest0 = fx.seed_states[acct_key], fx.seed_states["hikmat_state_guest"]
+    stars = {p: v for p, v in guarded(acct).items() if p.startswith("progress.")}
+    waited = []
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        first = ph.page.evaluate(STORAGE_JS)["keys"]
+        have = guarded(_parsed(first.get("hikmat_state_guest")))
+        short = [p for p, v in stars.items() if have.get(p, 0) < v]
+        waited.append("hikmat_current" in first)
+        if "hikmat_current" not in first and short:
+            probs.append("hikmat_current is gone and the guest profile lacks %d of S-0042's %d stars: the fold was "
+                         "lost" % (len(short), len(stars)))
+        if first.get(acct_key) != fx.local[acct_key]:
+            probs.append("%s was changed or removed" % acct_key)
+        # Room appears, as it does once the caches go or she clears space: the next launch must
+        # finish the fold it could not write before.
+        ph.page.evaluate(DROP_FILLER_JS)
+        ph.launch("new")
+        then = ph.page.evaluate(STORAGE_JS)["keys"]
+        guest = _parsed(then.get("hikmat_state_guest"))
+        if "hikmat_current" in then:
+            probs.append("hikmat_current is still there once there was room, so the fold never landed")
+        if guest is None:
+            probs.append("hikmat_state_guest missing once there was room")
+        else:
+            probs.extend(lowered(acct, guest, "the guest profile, against %s," % acct_key)
+                         + lowered(guest0, guest, "hikmat_state_guest") + fields_lost(guest0, guest, "hikmat_state_guest"))
+            for n, rec in sorted(_dict(acct.get("levelTests")).items()):
+                want = (_num(_dict(_dict(guest0.get("levelTests")).get(n)).get("attempts")) or 0) + (_num(_dict(rec).get("attempts")) or 0)
+                got = _num(_dict(_dict(guest.get("levelTests")).get(n)).get("attempts"))
+                if got != want:
+                    probs.append("levelTests.%s.attempts is %s, not %s: the fold counted an attempt twice" % (n, got, want))
+        if then.get(acct_key) != fx.local[acct_key]:
+            probs.append("%s was changed or removed after the fold" % acct_key)
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "%s, and once there was room it had landed once, with all %d of S-0042's stars"
+             % ("on the full phone the fold could not be written, so hikmat_current was kept for the next launch"
+                if waited and waited[0] else "the fold fitted even on the full phone", len(stars))))]
+
+
+LIVE_TAGLINE = "e2e: the tagline the server sent"
+LIVE_JS = r"""() => ({ live: backendLive === true, tagline: SETTINGS.tagline.en,
+                       fresh: COURSES.length > 0 && COURSES.every(c => c.e2eLive === true) })"""
+
+
+def storage_full_live_content(env, sabotage=None, prelude=None):
+    """S4. The same full phone, with the caches in it, now online. The server sends lessons that
+    take a little more room than the cached copy. Caching them must not throw: a throw there
+    skipped the settings and grade structure the server had just sent, and marked a server that
+    had answered as unreachable, which is what lesson videos wait for. Making room may drop the
+    content caches, and nothing else."""
+    tag, code = "[%s] storage_full_live_content" % env.mode, "S4"
+    fx = load_fixture(SAVES / "full-storage.json", "full-storage, online")
+    live = [dict(c, e2eLive=True) for c in CURRICULUM]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        pg = ph.ctx.new_page()
+        try:
+            pg.goto(env.base + SEED_PATH)
+            before = pg.evaluate(STORAGE_JS)
+        finally:
+            pg.close()
+        if not before["full"]:
+            probs.append("the phone was not full before the launch, so the launch proved nothing")
+        ph.answer(r"^/api/method/hikmat\.api\.get_courses$", status=200, content_type="application/json",
+                  body=compact({"message": live}))
+        ph.answer(r"^/api/method/hikmat\.api\.get_settings$", status=200, content_type="application/json",
+                  body=compact({"message": {"appName": "Bodhya Learn", "taglineEn": LIVE_TAGLINE}}))
+        ph.launch("new")
+        r = ph.page.evaluate(LIVE_JS)
+        if not r["fresh"]:
+            probs.append("the game is not showing the lessons the server sent")
+        if not r["live"]:
+            probs.append("backendLive is false although the server answered")
+        if r["tagline"] != LIVE_TAGLINE:
+            probs.append("the settings the server sent were never applied")
+        after = ph.page.evaluate(STORAGE_JS)["keys"]
+        probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after, may_go=CACHE_KEYS))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "the server's lessons and settings were taken on the full phone, and caching them removed nothing but "
+             "the content caches"))]
+
+
+@test("storage_full_drops_caches")
+def t_storage_full_drops_caches(env, report):
+    for _code, ok, msg in storage_full_drops_caches(env):
+        report.check(ok, msg)
+
+
+@test("storage_full_no_caches")
+def t_storage_full_no_caches(env, report):
+    for _code, ok, msg in storage_full_no_caches(env):
+        report.check(ok, msg)
+
+
+@test("retire_under_full_storage")
+def t_retire_under_full_storage(env, report):
+    for _code, ok, msg in retire_under_full_storage(env):
+        report.check(ok, msg)
+
+
+@test("storage_full_live_content")
+def t_storage_full_live_content(env, report):
+    for _code, ok, msg in storage_full_live_content(env):
+        report.check(ok, msg)
+
+
 def _played(fx):
     """A deterministic played star in the fixture's guest state that the curriculum still has."""
     prog = _dict(_dict(fx.seed_states.get("hikmat_state_guest")).get("progress"))
@@ -1370,6 +1736,25 @@ SLOW_FETCH = ("/* e2e self-test: content arrives late */(function(){var f=window
 # old account in again. Only a phone that never ran v7 can show it: v7 has already removed the key.
 KEEP_CURRENT = ("/* e2e self-test: hikmat_current survives the fold */(function(){var rm=Storage.prototype.removeItem;"
                 "Storage.prototype.removeItem=function(k){if(k==='hikmat_current')return;return rm.apply(this,arguments);};})();")
+# v7's save, with no guard: on a full phone its setItem throws, and the throw is all the save does.
+V7_SAVE = _sab("the save is unguarded, as in v7",
+               "save=function(){dropLevelCache();localStorage.setItem(stateKey(),JSON.stringify(state));};")
+# A write that makes room by throwing away whatever is not a saved state: filler, the settings
+# cache, any key this build does not know. It keeps the star and loses someone else's data.
+GREEDY_WRITE = _sab("a write makes room by dropping keys that are not its to drop",
+                    "var real=writeLocal;writeLocal=function(k,j){if(real(k,j))return true;"
+                    "for(var i=localStorage.length-1;i>=0;i--){var x=localStorage.key(i);"
+                    "if(x&&x.indexOf('hikmat_state_')!==0)localStorage.removeItem(x);}"
+                    "try{localStorage.setItem(k,j);return true;}catch(e){return false;}};")
+# The lessons cache written with a bare setItem again, as loadFromBackend did before the guard:
+# on a full phone the throw lands inside its try and skips everything after it.
+BARE_CACHE_WRITE = _sab("the lessons cache is written with a bare setItem again",
+                        "var real=writeLocal;writeLocal=function(k,j){if(k==='hikmat_courses_cache'){"
+                        "localStorage.setItem(k,j);return true;}return real.apply(this,arguments);};")
+# setItem never throws, so every refused write looks as if it landed. That is v7's fold, which
+# swallowed the error and dropped hikmat_current as though the account were safely folded in.
+SILENT_SETITEM = ("/* e2e self-test: a refused write looks like one that landed */(function(){var s=Storage.prototype.setItem;"
+                  "Storage.prototype.setItem=function(){try{return s.apply(this,arguments);}catch(e){}};})();")
 
 
 def _private_output_problems():
@@ -1408,8 +1793,9 @@ def _private_output_problems():
 @test("self-test", once=True)
 def t_self_test(env, report):
     """The checks must be able to fail, each on its own. Broken builds go through the same update
-    as the fixtures, and each must fail exactly the check it breaks, naming what it broke. A build
-    that is slow but correct must still pass, and a private save's output must carry nothing of hers."""
+    as the fixtures, or onto the same full phone as S1-S4, and each must fail exactly the check it
+    breaks, naming what it broke. A build that is slow but correct must still pass, and a private
+    save's output must carry nothing of hers."""
     tag = "[%s] self-test" % env.mode
     leaks = _private_output_problems()
     report.check(not leaks, "%s a private save's failures show no value, count, old student id or page text%s"
@@ -1418,8 +1804,7 @@ def t_self_test(env, report):
     mid = load_fixture(SAVES / "v7-midway.json", "v7-midway (sabotaged)")
     ck, lk, aid = _played(mid)
 
-    def expect(what, fx, codes, named, script=None, prelude=None, direct=False):
-        res = update_results(env, fx, sabotage=script, prelude=prelude, direct=direct)
+    def judged(what, res, codes, named):
         failed = {code: msg for code, ok, msg in res if not ok}
         for msg in failed.values():
             print("    caught: " + msg)
@@ -1427,6 +1812,9 @@ def t_self_test(env, report):
         said = ("fails %s and nothing else, naming %s" % (" and ".join(codes), ", ".join(t for _c, t in named))
                 if codes else "passes every check, because nothing was lost")
         report.check(ok, "%s %s %s%s" % (tag, what, said, "" if ok else " (failed: %s)" % (", ".join(sorted(failed)) or "nothing")))
+
+    def expect(what, fx, codes, named, script=None, prelude=None, direct=False):
+        judged(what, update_results(env, fx, sabotage=script, prelude=prelude, direct=direct), codes, named)
 
     q = json.dumps
     expect("a star set to 0", mid, ["I1", "I2"], [("I1", "%s.%s.%s" % (ck, lk, aid))], script=_sab(
@@ -1456,6 +1844,14 @@ def t_self_test(env, report):
     expect("hikmat_current kept after the new build's fold", load_fixture(SAVES / "retired-account.json", "retired-account (sabotaged)"),
            ["direct I5"], [("direct I5", "levelTests.1.attempts")], prelude=KEEP_CURRENT, direct=True)
     expect("content that arrives 700 ms late", mid, [], [], prelude=SLOW_FETCH)
+    judged("a save that lets a full phone's error escape, as v7's did", storage_full_drops_caches(env, sabotage=V7_SAVE),
+           ["S1"], [("S1", "QuotaExceededError")])
+    judged("a write that makes room by dropping keys that are not caches", storage_full_no_caches(env, sabotage=GREEDY_WRITE),
+           ["S2"], [("S2", "removed to make room")])
+    judged("a refused write that looks as if it landed", retire_under_full_storage(env, prelude=SILENT_SETITEM),
+           ["S3"], [("S3", "hikmat_current")])
+    judged("a lessons cache written with a bare setItem again", storage_full_live_content(env, sabotage=BARE_CACHE_WRITE),
+           ["S4"], [("S4", "backendLive")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------
