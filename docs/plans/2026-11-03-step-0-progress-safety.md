@@ -95,7 +95,7 @@ Tests that replay real saves through the update must prove that no star total dr
   - `/game-old.html` is fulfilled via `page.route` from `git show <old>:hikmat/public/game.html`. `/game.html` is the new build.
   - Contexts use `service_workers="block"` and viewport 360×640. Collect `pageerror` and console errors, and fail on any.
   - Every request to a host other than the local server is aborted, so a test can never reach learn.bodhya.net.
-  - The plugin API shapes come from the real `definitions.d.ts` in `/private/tmp/claude-501/-Users-fossdot-Developer-hikmat-bench/190a782b-b183-4ee4-841b-f39b7ff55bd3/scratchpad/plugin-src/capacitor-*/package/dist/esm/`.
+  - The plugin API shapes come from the real `definitions.d.ts` of `@capacitor/preferences@8.0.1`, `@capacitor/filesystem@8.1.5` and `@capacitor/share@8.0.3` (`npm pack` each one; the file is `package/dist/esm/definitions.d.ts`, and the Android sources sit beside it).
 - **Native mode:** an init script defines `window.Capacitor = {Plugins:{Preferences, Filesystem, Share}}` before any page script. The calls go through `page.expose_function` to a Python `NATIVE` dict that survives reloads and `localStorage.clear()`.
   - Preferences: `get({key})→{value}`, `set({key,value})`, `remove({key})`, `keys()→{keys}`.
   - Filesystem: `writeFile({path,data,directory,encoding})→{uri:"file:///cache/"+path}`, recording the data.
