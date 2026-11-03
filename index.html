@@ -982,7 +982,11 @@
   }
   @media (max-width: 560px){
     .topbar { row-gap: 8px; }
-    .brand { order: 0; }
+    /* basis 0, not auto: with `auto` a long back label ("← Vegetables at the Bazaar") is too
+       wide to share the row, so flex-wrap pushed the buttons onto a third row instead of
+       shrinking the label. At 0 the back area takes only the space left beside the cluster
+       and #backLabel truncates with an ellipsis (rules below). */
+    .topbar .brand { order: 0; flex: 1 1 0; min-width: 0; }   /* .topbar: outranks the later `.brand { flex:1 1 auto }` */
     .utils { order: 1; flex: 0 0 auto; }
     .stats { order: 2; flex: 1 1 100%; justify-content: center; margin-left: 0; }
   }
