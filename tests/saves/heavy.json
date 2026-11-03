@@ -1,0 +1,2728 @@
+{
+ "kind": "bodhya-progress",
+ "v": 1,
+ "app": "net.bodhya.learn",
+ "savedAt": "2026-11-02T10:00:00.000Z",
+ "state": {
+  "progress": {
+   "bazaar": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l03": {
+     "learn": 3,
+     "odd": 3,
+     "sort": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "count": 3,
+     "fix": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "money": 3,
+     "fix": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "money": 3,
+     "fix": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "fix": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "notice": 3,
+     "fix": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "order": 3,
+     "fix": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "order": 3,
+     "fix": 3
+    }
+   },
+   "home": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3,
+     "hunt": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "fix": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "order": 3,
+     "fix": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3,
+     "fix": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "order": 3,
+     "fix": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "fix": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "fix": 3
+    }
+   },
+   "school": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "fix": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3,
+     "fix": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "fix": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "notice": 3,
+     "clock": 3,
+     "fix": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "fix": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "story": 3,
+     "fix": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3,
+     "fix": 3,
+     "hunt": 3
+    }
+   },
+   "work": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "order": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3,
+     "hunt": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "cloze": 3,
+     "fix": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "scam": 3,
+     "fix": 3,
+     "email": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "form": 3,
+     "email": 3
+    },
+    "l11": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3,
+     "rapid": 3
+    },
+    "l12": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "order": 3,
+     "scam": 3
+    },
+    "l13": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3
+    },
+    "l14": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3
+    },
+    "l15": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3
+    },
+    "l16": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "rapid": 3,
+     "order": 3,
+     "email": 3
+    },
+    "l17": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "cloze": 3
+    },
+    "l18": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "order": 3,
+     "code": 3,
+     "fix": 3
+    },
+    "l19": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "cloze": 3,
+     "code": 3,
+     "fix": 3
+    },
+    "l20": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "rapid": 3,
+     "code": 3,
+     "fix": 3
+    },
+    "l21": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "code": 3,
+     "fix": 3
+    },
+    "l22": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "rapid": 3,
+     "form": 3
+    },
+    "l23": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "story": 3
+    },
+    "l24": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "scam": 3,
+     "email": 3
+    },
+    "l25": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "form": 3,
+     "email": 3
+    }
+   },
+   "eng-foundation": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "sounds": 3,
+     "rhyme": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "count": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "hunt": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3,
+     "hunt": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "quiz": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "branch": 3,
+     "quiz": 3,
+     "rapid": 3
+    }
+   },
+   "math-early": {
+    "l01": {
+     "pairs": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "count": 3
+    },
+    "l02": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "count": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l04": {
+     "cloze": 3,
+     "quiz": 3,
+     "count": 3
+    },
+    "l05": {
+     "pairs": 3,
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l06": {
+     "odd": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "money": 3
+    },
+    "l08": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "count": 3
+    },
+    "l09": {
+     "pairs": 3,
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l10": {
+     "quiz": 3,
+     "rapid": 3,
+     "clock": 3
+    },
+    "l11": {
+     "cloze": 3,
+     "quiz": 3,
+     "money": 3
+    }
+   },
+   "evs-myworld": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "count": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "count": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "hunt": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "count": 3,
+     "order": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    }
+   },
+   "eng-grammar": {
+    "l01": {
+     "odd": 3,
+     "sort": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l02": {
+     "sort": 3,
+     "translate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l03": {
+     "odd": 3,
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l04": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l05": {
+     "odd": 3,
+     "translate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l06": {
+     "dictate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l07": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l08": {
+     "odd": 3,
+     "branch": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l09": {
+     "translate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l10": {
+     "sort": 3,
+     "dictate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    }
+   },
+   "math-numbers": {
+    "l01": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "pairs": 3,
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l04": {
+     "odd": 3,
+     "sort": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l06": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l07": {
+     "story": 3,
+     "quiz": 3,
+     "form": 3
+    },
+    "l08": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l09": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l10": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    }
+   },
+   "sci-around": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "hunt": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "hunt": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    }
+   },
+   "eng-mastery": {
+    "l01": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l02": {
+     "sort": 3,
+     "translate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l03": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l04": {
+     "sort": 3,
+     "translate": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l05": {
+     "story": 3,
+     "read": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l06": {
+     "branch": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l07": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l08": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l09": {
+     "read": 3,
+     "notice": 3,
+     "quiz": 3,
+     "form": 3
+    }
+   },
+   "math-algebra": {
+    "l01": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "odd": 3,
+     "sort": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l04": {
+     "pairs": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l06": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l07": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l09": {
+     "story": 3,
+     "cloze": 3,
+     "quiz": 3
+    }
+   },
+   "sci-physics": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    }
+   },
+   "comp-basics": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "hunt": 3
+    },
+    "l02": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "scam": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "money": 3,
+     "order": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "notice": 3,
+     "quiz": 3,
+     "form": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3,
+     "hunt": 3
+    }
+   },
+   "health": {
+    "body": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3
+    },
+    "clinic": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "read": 3
+    },
+    "illness": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3,
+     "rapid": 3
+    },
+    "medicine-shop": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "notice": 3,
+     "scam": 3
+    },
+    "healthy-habits": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "order": 3
+    },
+    "mother-baby": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "read": 3
+    },
+    "first-aid": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "order": 3
+    },
+    "eating-well": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "count": 3
+    },
+    "vaccination": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "story": 3,
+     "read": 3
+    },
+    "clean-water": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "mosquito": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3
+    },
+    "big-hospital": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "order": 3,
+     "form": 3
+    }
+   },
+   "money": {
+    "coins": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "money": 3
+    },
+    "bank": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "read": 3,
+     "form": 3
+    },
+    "saving": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "read": 3,
+     "rapid": 3
+    },
+    "atm": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3,
+     "order": 3
+    },
+    "upi": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "scam": 3
+    },
+    "bills": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "notice": 3,
+     "money": 3
+    },
+    "loan": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "story": 3,
+     "read": 3
+    },
+    "safe-money": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "read": 3,
+     "scam": 3
+    },
+    "budget": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "rapid": 3
+    },
+    "passbook": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "notice": 3
+    },
+    "profit": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3
+    },
+    "insurance": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "story": 3,
+     "read": 3,
+     "order": 3
+    }
+   },
+   "travel": {
+    "around": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "clock": 3
+    },
+    "directions": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "translate": 3,
+     "talk": 3,
+     "branch": 3,
+     "read": 3
+    },
+    "bus-stand": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "order": 3
+    },
+    "railway": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3,
+     "notice": 3
+    },
+    "auto-rickshaw": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "read": 3,
+     "money": 3
+    },
+    "road-safety": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "landmarks": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3
+    },
+    "trip-plan": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3,
+     "clock": 3
+    },
+    "ticket-book": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "form": 3
+    },
+    "packing": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "order": 3
+    },
+    "phone-map": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "cloze": 3,
+     "rapid": 3
+    },
+    "if-lost": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "branch": 3,
+     "story": 3,
+     "read": 3
+    }
+   },
+   "coding": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "quiz": 3,
+     "order": 3,
+     "code": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "code": 3,
+     "fix": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "code": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "code": 3,
+     "fix": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "code": 3,
+     "fix": 3
+    }
+   },
+   "ai": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "talk": 3,
+     "read": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "quiz": 3,
+     "scam": 3,
+     "fix": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "read": 3,
+     "cloze": 3,
+     "quiz": 3
+    }
+   },
+   "hindi-aksharmala": {
+    "l01": {
+     "pairs": 3,
+     "sort": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "pairs": 3,
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l04": {
+     "pairs": 3,
+     "odd": 3,
+     "read": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "pairs": 3,
+     "sort": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l06": {
+     "pairs": 3,
+     "read": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l07": {
+     "pairs": 3,
+     "odd": 3,
+     "read": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "story": 3,
+     "read": 3,
+     "cloze": 3,
+     "order": 3
+    },
+    "l09": {
+     "pairs": 3,
+     "odd": 3,
+     "read": 3,
+     "quiz": 3
+    },
+    "l10": {
+     "read": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l11": {
+     "pairs": 3,
+     "read": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l12": {
+     "story": 3,
+     "read": 3,
+     "order": 3
+    }
+   },
+   "sci-early": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "count": 3
+    },
+    "l11": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l12": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    }
+   },
+   "hindi-vyakaran": {
+    "l01": {
+     "odd": 3,
+     "sort": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l02": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l03": {
+     "odd": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l04": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l05": {
+     "pairs": 3,
+     "sort": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l06": {
+     "pairs": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l07": {
+     "sort": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l08": {
+     "pairs": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l09": {
+     "pairs": 3,
+     "odd": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l10": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l11": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    },
+    "l12": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "fix": 3
+    }
+   },
+   "sst-bharat": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "hunt": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "read": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "hunt": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "notice": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l11": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "hunt": 3
+    },
+    "l12": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "read": 3,
+     "quiz": 3
+    }
+   },
+   "comp-skills": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "dictate": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "order": 3,
+     "hunt": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "quiz": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "scam": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "order": 3,
+     "form": 3
+    },
+    "l11": {
+     "learn": 3,
+     "listen": 3,
+     "pairs": 3,
+     "spell": 3,
+     "phrase": 3,
+     "branch": 3,
+     "quiz": 3
+    },
+    "l12": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "scam": 3
+    }
+   },
+   "hindi-sahitya": {
+    "l01": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "sort": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l03": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l04": {
+     "sort": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l05": {
+     "story": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l06": {
+     "pairs": 3,
+     "sort": 3,
+     "quiz": 3
+    },
+    "l07": {
+     "story": 3,
+     "read": 3,
+     "cloze": 3
+    },
+    "l08": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    },
+    "l09": {
+     "sort": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l10": {
+     "odd": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l11": {
+     "story": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l12": {
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "fix": 3
+    }
+   },
+   "sst-secondary": {
+    "l01": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l02": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l03": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l04": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l05": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "order": 3
+    },
+    "l06": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l07": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "read": 3,
+     "quiz": 3,
+     "rapid": 3,
+     "form": 3
+    },
+    "l08": {
+     "learn": 3,
+     "listen": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "cloze": 3,
+     "quiz": 3
+    },
+    "l09": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "notice": 3,
+     "quiz": 3,
+     "rapid": 3
+    },
+    "l10": {
+     "learn": 3,
+     "listen": 3,
+     "odd": 3,
+     "sort": 3,
+     "spell": 3,
+     "phrase": 3,
+     "quiz": 3
+    },
+    "l11": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "notice": 3,
+     "quiz": 3,
+     "order": 3
+    },
+    "l12": {
+     "learn": 3,
+     "listen": 3,
+     "spell": 3,
+     "phrase": 3,
+     "story": 3,
+     "read": 3,
+     "quiz": 3,
+     "form": 3
+    }
+   }
+  },
+  "coins": 99999,
+  "hindi": false,
+  "lang": "en",
+  "sound": false,
+  "testSeen": {
+   "L1": [
+    "87e0vkdnef",
+    "87erpl2j3m",
+    "87e1em2fcq",
+    "87env1jer2",
+    "87erb8qm3o",
+    "87epnssmnc",
+    "87eg7soa4e",
+    "87e4mt5k70",
+    "87e2ea5ubb",
+    "87e072i19n",
+    "87es2vjfet",
+    "87e9ccikdb",
+    "87e6nark52",
+    "87elgl8t4l",
+    "87eg9d85ai",
+    "87e11lc0qc",
+    "87eg1c5dlc",
+    "87eq9mqr3p",
+    "87e79oq995",
+    "87ebn6jk02",
+    "881p8mjpob",
+    "881g30jkei",
+    "881sjj0ab7",
+    "8819f1pp9a",
+    "881hb31k8i",
+    "881srdq7v5",
+    "881mb6mcea",
+    "881h7gcsds",
+    "881d29o09t",
+    "88173ah28l",
+    "881btpqckk",
+    "8818s45uu4",
+    "881j7v6oso",
+    "881i55oc9c",
+    "881o15af1i",
+    "881ct0vm9d",
+    "881pggg4gs",
+    "881tjbq8sr",
+    "8812rmnv5s",
+    "881db3enp3"
+   ],
+   "L2": [
+    "87ef129pcf",
+    "87elde5s51",
+    "87epkm287u",
+    "87erjpfv5s",
+    "87e1bifien",
+    "87e1vd6rkf",
+    "87e2jobf2q",
+    "87eec86evi",
+    "87frckv5l5",
+    "87f60ocucu",
+    "87f9h2tatb",
+    "87fquqr9ko",
+    "87f849fhuu",
+    "87f5l37mv5",
+    "87f3b0sp7s",
+    "87ff3miud0",
+    "87f81p83p6",
+    "87fose3f78",
+    "87f25mmv52",
+    "87f75erjk9",
+    "8813f472uh",
+    "881hu65m4m",
+    "881pao9371",
+    "881a64d8lb",
+    "8816u9nbau",
+    "881e65s9t8",
+    "8810v7hjuj",
+    "8819dcs24h",
+    "8818k8bofb",
+    "881fh604tt",
+    "881ooeeamf",
+    "8818osdrk8",
+    "881o7kad71",
+    "881bfbuijf",
+    "881342kdkp",
+    "8811fdhgqv",
+    "881b4s7m48",
+    "8810jaanbi",
+    "881uhvp4gd",
+    "889vigv6lb"
+   ],
+   "L3": [
+    "87f7vgmbkb",
+    "87fbos1s7u",
+    "87feaut02p",
+    "87fbmpu50o",
+    "87fmj9hkpe",
+    "87fntuosca",
+    "87fjpeqsgp",
+    "87fsk4dkac",
+    "87fufongin",
+    "87fokfcs4q",
+    "87ffg82sac",
+    "87ffaifkqm",
+    "87ff2vl6tt",
+    "87fo0o9ird",
+    "87fobrrpkf",
+    "87fnule668",
+    "87fcklqc06",
+    "87fbihfnl3",
+    "87fmghinah",
+    "87f2pb4dnq",
+    "8813cn6q69",
+    "8812i6nhcv",
+    "881jc8rpbi",
+    "881d4u82fa",
+    "881hrcisn3",
+    "881ndsugf0",
+    "881fvrstp1",
+    "881fj3ct8c",
+    "8814eiu935",
+    "881vk0skh8",
+    "881juk9b3g",
+    "8814efma87",
+    "881hshq59d",
+    "881r76u7rr",
+    "881di71rt7",
+    "881pck1pbi",
+    "8812634800",
+    "881lmqo08l",
+    "881sp8lfib",
+    "881mhtv1ua"
+   ],
+   "L4": [
+    "87fkhg9d9r",
+    "87fi6fftnk",
+    "87f05ha8p7",
+    "87f16tiu21",
+    "87f553cocf",
+    "87fdaclmtm",
+    "87fpddnjj7",
+    "87fcfa8gcn",
+    "87fu0413s2",
+    "87fle7pm3j",
+    "87fjt88par",
+    "87f953olv1",
+    "87fgscn11o",
+    "87f4b3capd",
+    "87fcpitrdq",
+    "87fgl9ku80",
+    "87fpd8rtok",
+    "87fc1729ob",
+    "87f3fimdot",
+    "87f6q7gl2i",
+    "881gblgvq9",
+    "881rtnpbm1",
+    "8818h19o37",
+    "8816j68uqn",
+    "88172h02ha",
+    "8823qhc7do",
+    "882f3vo7ul",
+    "8822gf1t1a",
+    "88284mr16d",
+    "882cbnmqi1",
+    "882fpi4bgj",
+    "882hm75iv1",
+    "882o6bhchp",
+    "882potgk9s",
+    "882st4d45m",
+    "882dp89e12",
+    "8827rb4pps",
+    "882dc0p9n1",
+    "882r4vs4e5",
+    "882bkk394b"
+   ],
+   "L5": [
+    "87fum0ebsg",
+    "87f3cqf43b",
+    "87f8aa2isf",
+    "87fph4q3mt",
+    "87f2i0mn7d",
+    "87f8dl4rhs",
+    "87fs00q3pm",
+    "87fuculu4d",
+    "87fqstu6mm",
+    "87fi77p5k9",
+    "87fn14318n",
+    "87ffte8510",
+    "87fi70b5kg",
+    "87fc5hmsca",
+    "87fa8rshsh",
+    "87fjipjqt1",
+    "87ffnqt6jj",
+    "87fm0to4kt",
+    "87gf3g0urm",
+    "87gv3u1o92",
+    "882otv4lom",
+    "882nnj21b1",
+    "882i6n6cld",
+    "88207kj40a",
+    "882p4f541v",
+    "882li6ujpi",
+    "882vl20dnq",
+    "882bltlpna",
+    "882cj70ja4",
+    "88282ltd49",
+    "882rg77l5n",
+    "882iahts8f",
+    "882m28d3ik",
+    "8825deim3n",
+    "882kvtgku6",
+    "882lrclinr",
+    "8827ndb8p9",
+    "882aspt2qi",
+    "882m2kkp8j",
+    "882qhjkka1"
+   ]
+  },
+  "levelTests": {
+   "1": {
+    "passed": true,
+    "bestPct": 80,
+    "attempts": 1
+   },
+   "2": {
+    "passed": true,
+    "bestPct": 84,
+    "attempts": 2
+   },
+   "3": {
+    "passed": true,
+    "bestPct": 88,
+    "attempts": 3
+   },
+   "4": {
+    "passed": true,
+    "bestPct": 92,
+    "attempts": 4
+   },
+   "5": {
+    "passed": true,
+    "bestPct": 96,
+    "attempts": 5
+   }
+  },
+  "videosSeen": {
+   "bazaar": 1,
+   "home": 1,
+   "school": 1,
+   "work": 1,
+   "eng-foundation": 1,
+   "math-early": 1,
+   "evs-myworld": 1,
+   "eng-grammar": 1,
+   "math-numbers": 1,
+   "sci-around": 1,
+   "eng-mastery": 1,
+   "math-algebra": 1,
+   "sci-physics": 1,
+   "comp-basics": 1,
+   "health": 1,
+   "money": 1,
+   "travel": 1,
+   "coding": 1,
+   "ai": 1,
+   "hindi-aksharmala": 1,
+   "sci-early": 1,
+   "hindi-vyakaran": 1,
+   "sst-bharat": 1,
+   "comp-skills": 1,
+   "hindi-sahitya": 1,
+   "sst-secondary": 1
+  },
+  "seenTypes": {
+   "branch": 1,
+   "clock": 1,
+   "cloze": 1,
+   "code": 1,
+   "count": 1,
+   "dictate": 1,
+   "email": 1,
+   "fix": 1,
+   "form": 1,
+   "hunt": 1,
+   "learn": 1,
+   "listen": 1,
+   "money": 1,
+   "notice": 1,
+   "odd": 1,
+   "order": 1,
+   "pairs": 1,
+   "phrase": 1,
+   "quiz": 1,
+   "rapid": 1,
+   "read": 1,
+   "rhyme": 1,
+   "scam": 1,
+   "sort": 1,
+   "sounds": 1,
+   "spell": 1,
+   "story": 1,
+   "talk": 1,
+   "translate": 1
+  },
+  "theme": "light",
+  "prefsTouched": true,
+  "gender": "Other",
+  "mascot": "roshni",
+  "lastLoc": {
+   "class": {
+    "ck": "comp-basics",
+    "lk": "l01"
+   },
+   "subject": {
+    "ck": "comp-basics",
+    "lk": "l02"
+   },
+   "life": {
+    "ck": "ai",
+    "lk": "l01"
+   }
+  },
+  "lastMode": "life"
+ }
+}

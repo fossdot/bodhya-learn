@@ -30,3 +30,9 @@ KEYSTORE-CREDENTIALS*.txt
 *.apk
 .env
 .env.*
+
+# ---- Real tester saves --------------------------------------------------------
+# e2e-progress-safety.py replays real progress files from tester phones, shared with a parent's
+# OK for that one purpose. They are children's data and this repo is PUBLIC, so they stay on the
+# machine that runs the harness. See tests/saves/README.md.
+tests/saves/private/
