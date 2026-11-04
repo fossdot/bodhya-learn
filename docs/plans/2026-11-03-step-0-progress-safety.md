@@ -175,6 +175,12 @@ Tests that replay real saves through the update must prove that no star total dr
 - S4 now has two cases. S4 is IndexedDB working, and the server's lessons must land in IndexedDB. S4b is IndexedDB blocked, which is the old S4; the bare-setItem sabotage now targets S4b.
 - New self-test sabotages: caches copied but never removed (C1), and a store that is never read back (C2).
 - The harness compares cache values as raw strings. STORAGE_JS reports other keys as lengths, and JS and Python count lengths differently for emoji.
+- Self-test, added on Vishal's review: a cache that leaves localStorage before IndexedDB confirms the write must fail C2. The star-set-to-0 sabotage still fails I1 and I2.
+- `e2e-levels.py` needs a signed-up learner, and v8 has accounts off. Its two checks that still hold now run in this harness for a learner with no account, as `level_test_promotes`:
+  - LT1: passing the level-1 test promotes her, and the pass is stored and survives a relaunch.
+  - LT2: nothing locks.
+  - Sabotages: a level wall must fail LT2, and an unstored pass must fail LT1.
+- `e2e-levels.py` stays for the web build on main and nightly, which still signs learners in, until step 5. On an accounts-off build it says SKIP. Step 3 replaces the ladder, and these tests with it.
 
 ### Task 4: Native mirror, boot snapshot, launch merge, erase marker, backup rules (rules 2, 6, 8)
 

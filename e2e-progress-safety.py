@@ -2247,6 +2247,117 @@ def idb_blocked_falls_back(env, sabotage=None, prelude=None):
     return out
 
 
+# ---------------------------------------------------------------- level test, no account ------
+# The two checks of e2e-levels.py that still hold with accounts off: passing the level test
+# promotes her, and nothing ever locks. e2e-levels.py signs a learner up on a running site; it
+# stays for the web build, which still signs learners in, until step 5. Step 3 replaces the whole
+# ladder with checkpoints, and its tests replace these.
+
+# Every published lesson that lessonLock() shuts, as "course/lesson".
+LOCKS_JS = r"""() => { const out = [];
+  COURSES.forEach(c => { if (!c.published) return; (c.lessons || []).forEach(ls => { if (lessonLock(c, ls)) out.push(c.key + "/" + ls.key); }); });
+  return out; }"""
+# 110 stars on level-1 lessons, as e2e-levels.py earns them: the whole of eng-foundation first,
+# then lessons with quiz items, so the paper has enough questions.
+EARN_L1_JS = r"""() => {
+  let stars = 0;
+  const order = [COURSES.find(c => c.key === 'eng-foundation')].concat(COURSES.filter(c => c.key !== 'eng-foundation'));
+  order.forEach(c => { if (!c || !c.published) return; c.lessons.forEach(ls => {
+    if (lessonLevel(c, ls) !== 1 || stars >= 110) return;
+    if (c.key !== 'eng-foundation' && !(ls.quiz && ls.quiz.length)) return;
+    levelsFor(ls).forEach(lv => { setStars(c.key, ls.key, lv.id, 3); stars += 3; });
+  }); });
+  save(); refreshTop();
+  return [stars, levelTestDue(1)];
+}"""
+
+
+def _sit_level_test(page):
+    """Sit the level-1 test through the game's own screens, from the trophy on the trail: every
+    question answered right except the third, which is left to time out. That is 19 of 20, 95%.
+    Returns what went wrong, or ""."""
+    try:
+        page.evaluate("renderTrack(COURSES.find(c => c.key === 'eng-foundation'))")
+        page.locator("#path .node", has_text="🏆").first.click(timeout=3000)
+        page.click("#tstart", timeout=3000)
+        page.wait_for_selector("#ttimer", timeout=5000)
+        n = page.evaluate("TEST.paper.qs.length")
+        for i in range(n):
+            page.wait_for_function("(i) => TEST && TEST.idx === i && !TEST._answered", arg=i, timeout=5000)
+            if i == 2:
+                page.evaluate("TEST.qDeadline = Date.now() + 800")
+                page.wait_for_function("(i) => TEST && (TEST.idx !== i || TEST._answered)", arg=i, timeout=6000)
+                continue
+            ans = page.evaluate("TEST.paper.qs[TEST.idx].answer")
+            page.locator(".quizopt", has_text=re.compile("^" + re.escape(ans) + "$")).first.click(timeout=3000)
+        page.wait_for_selector(".result", timeout=8000)
+        page.click("#tdone", timeout=3000)
+        page.wait_for_selector("#path .step", timeout=5000)
+    except PWTimeout as e:
+        return "the level test stopped answering her (%s)" % _line(str(e), 120)
+    return ""
+
+
+def level_test_promotes(env, sabotage=None, prelude=None):
+    """LT1. A learner with no account, on a phone with nothing played, earns 110 level-1 stars,
+    and the level-1 test comes due. She passes it with 95%: she is at level 2, the pass is in her
+    stored state, and both are still there after a relaunch. Nothing is sent: with accounts off
+    there is nobody to send it for. LT2. Nothing locks: not at zero stars, not while the test is
+    due, not after she passes, and not after the relaunch."""
+    tag = "[%s] level_test_promotes" % env.mode
+    erased = load_fixture(SAVES / "post-erase.json", "post-erase")
+    fx = Fixture("a learner with no account and nothing played", {
+        "kind": "bodhya-progress", "v": 1, "app": APP_ID, "savedAt": SAVED_AT,
+        "state": dict(erased.seed_states["hikmat_state_guest"], lang="en")})
+    promo, locks, sent = [], [], []
+
+    def shut(when, page):
+        got = page.evaluate(LOCKS_JS)
+        if got:
+            locks.append("%s, %d lessons are locked: %s" % (when, len(got), _clip(got, 3)))
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        ph.page.on("request", lambda r: sent.append(r.url) if "submit_test" in r.url else None)
+        shut("at zero stars", ph.page)
+        stars, due = ph.page.evaluate(EARN_L1_JS)
+        if not due:
+            promo.append("the level-1 test is not due after %d level-1 stars" % stars)
+        shut("with the level-1 test due", ph.page)
+        why = _sit_level_test(ph.page)
+        if why:
+            promo.append(why)
+        lvl = ph.page.evaluate("studentLevel()")
+        if lvl != 2:
+            promo.append("after passing she is at level %s, not 2" % lvl)
+        shut("after passing", ph.page)
+        ph.launch("new")
+        lvl = ph.page.evaluate("studentLevel()")
+        stored = _dict(_dict(_parsed(ph.page.evaluate(STORAGE_JS)["keys"].get("hikmat_state_guest"))).get("levelTests")).get("1")
+        if lvl != 2:
+            promo.append("after a relaunch she is at level %s, not 2" % lvl)
+        if not _dict(stored).get("passed"):
+            promo.append("after a relaunch the stored state does not hold the level-1 pass")
+        shut("after a relaunch", ph.page)
+        if sent:
+            promo.append("the result was sent to %d submit_test request(s), with accounts off" % len(sent))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    lt1, lt2 = probs + promo, probs + locks
+    return [("LT1", not lt1, "%s LT1 %s" % (tag, _clip(lt1, 4) if lt1 else
+             "she passed the level-1 test with 95% and is at level 2, stored and still there after a relaunch, "
+             "and nothing was sent")),
+            ("LT2", not lt2, "%s LT2 %s" % (tag, _clip(lt2, 4) if lt2 else
+             "no lesson locked at zero stars, with the test due, after passing, or after a relaunch"))]
+
+
+@test("level_test_promotes")
+def t_level_test_promotes(env, report):
+    for _code, ok, msg in level_test_promotes(env):
+        report.check(ok, msg)
+
+
 @test("caches_move_to_idb")
 def t_caches_move_to_idb(env, report):
     for _code, ok, msg in caches_move_to_idb(env):
@@ -2379,6 +2490,22 @@ KEEP_CACHES = ("/* e2e self-test: the caches never leave localStorage */(functio
 # The content store is written but never read back: every read finds nothing, so offline the game
 # has only its small bundled fallback, as if the caches had been thrown away.
 UNREAD_STORE = _sab("the content store is never read back", "contentStore.get=function(){return Promise.resolve(null);};")
+# The move as it must never be: each cache leaves localStorage when its write to IndexedDB starts,
+# not when IndexedDB confirms it, and the write then fails (here it is aborted, as when the app is
+# closed mid-write). The cache is in neither place, and offline she has only the bundled fallback.
+REMOVE_BEFORE_COMMIT = ("/* e2e self-test: a cache leaves localStorage before IndexedDB confirms it */(function(){"
+                        "var put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(v,k){"
+                        "try{localStorage.removeItem(k);}catch(e){}var r=put.apply(this,arguments);"
+                        "try{this.transaction.abort();}catch(e){}return r;};})();")
+# Every lesson from level 2 up is shut until she reaches its level: the ladder wall that "nothing
+# locks" replaced.
+LEVEL_WALL = _sab("lessons above her level are locked again", "var orig=lessonLock;lessonLock=function(course,ls){"
+                  "if(course&&ls&&lessonLevel(course,ls)>studentLevel())return{kind:'level',level:lessonLevel(course,ls)};"
+                  "return orig.apply(this,arguments);};")
+# Every save leaves the level-test results out, so a pass she has just earned is never stored and
+# the next launch has her back at level 1.
+UNSAVED_PASS = _sab("a level-test pass is never stored", "var real=save;save=function(){var t=state.levelTests;"
+                    "state.levelTests={};try{return real.apply(this,arguments);}finally{state.levelTests=t;}};")
 # dropContentCaches() takes the settings cache too, which is not one of the three it may drop.
 DROP_SETTINGS_TOO = _sab("making room also drops the settings cache",
                          "var real=dropContentCaches;dropContentCaches=function(){real();"
@@ -2513,6 +2640,12 @@ def t_self_test(env, report):
            ["C1"], [("C1", "still in localStorage")])
     judged("a content store that is never read back", offline_uses_idb_cache(env, sabotage=UNREAD_STORE),
            ["C2"], [("C2", "never loaded")])
+    judged("a cache taken out of localStorage before IndexedDB confirms it", offline_uses_idb_cache(env, prelude=REMOVE_BEFORE_COMMIT),
+           ["C2"], [("C2", "never loaded")])
+    judged("lessons above her level locked again", level_test_promotes(env, sabotage=LEVEL_WALL),
+           ["LT2"], [("LT2", "lessons are locked")])
+    judged("a level-test pass that is never stored", level_test_promotes(env, sabotage=UNSAVED_PASS),
+           ["LT1"], [("LT1", "after a relaunch she is at level 1")])
     judged("Start fresh that leaves a waiting account fold in place", erase_while_fold_pending(env, sabotage=KEEP_WAITING_FOLD),
            ["S5"], [("S5", "waiting fold landed")])
     carried = _carried(load_fixture(SAVES / "retired-account.json", "retired-account"))
