@@ -1557,8 +1557,13 @@ def storage_full_drops_caches(env, sabotage=None, prelude=None):
     been online for months is. She earns a new star: the save must keep it, by dropping the caches
     (the game rebuilds them from its bundled files, and from the server when it answers) and
     writing again. Nothing else may go: every saved state and every other key stays as it was,
-    the settings cache such a phone also holds among them."""
+    the settings cache such a phone also holds among them.
+
+    Since Task 3 a launch moves the caches into IndexedDB (C1), and that alone makes room, so the
+    caches can still be in localStorage at her next save only where IndexedDB is not there to take
+    them. That is the phone this runs on: IndexedDB refuses to open, as in C3."""
     tag, code = "[%s] storage_full_drops_caches" % env.mode, "S1"
+    prelude = IDB_BLOCKED + (prelude or "")
     fx = load_fixture(SAVES / "full-storage.json", "full-storage")
     fx.local = dict(fx.local, hikmat_settings_cache=SETTINGS_CACHE)
     (ck, lk), = _fresh_lessons(fx, 1)
@@ -1980,13 +1985,19 @@ LIVE_JS = r"""() => ({ live: backendLive === true, tagline: SETTINGS.tagline.en,
                        fresh: COURSES.length > 0 && COURSES.every(c => c.e2eLive === true) })"""
 
 
-def storage_full_live_content(env, sabotage=None, prelude=None):
+def storage_full_live_content(env, sabotage=None, prelude=None, idb=True):
     """S4. The same full phone, with the caches in it, now online. The server sends lessons that
     take a little more room than the cached copy. Caching them must not throw: a throw there
     skipped the settings and grade structure the server had just sent, and marked a server that
     had answered as unreachable, which is what lesson videos wait for. Making room may drop the
-    content caches, and nothing else."""
-    tag, code = "[%s] storage_full_live_content" % env.mode, "S4"
+    content caches, and nothing else.
+
+    S4 is the phone as it is since Task 3: the launch moves the caches into IndexedDB, and the
+    server's lessons must land there. S4b is the same phone with IndexedDB refusing to open, where
+    the lessons go back to localStorage through writeLocal() and the full phone is still full."""
+    tag, code = "[%s] storage_full_live_content%s" % (env.mode, "" if idb else " (IndexedDB blocked)"), "S4" if idb else "S4b"
+    if not idb:
+        prelude = IDB_BLOCKED + (prelude or "")
     fx = load_fixture(SAVES / "full-storage.json", "full-storage, online")
     fx.local = dict(fx.local, hikmat_settings_cache=SETTINGS_CACHE)
     live = [dict(c, e2eLive=True) for c in CURRICULUM]
@@ -2013,11 +2024,245 @@ def storage_full_live_content(env, sabotage=None, prelude=None):
         # still be there: it is not one of the caches a write may drop to make room.
         probs.extend(_states_kept(fx, after) + _left_alone(before["keys"], after, may_go=CACHE_KEYS,
                                                            may_change=("hikmat_settings_cache",)))
+        if idb:
+            got = _content_db(ph, lambda db: all(c.get("e2eLive") for c in _list(db["kv"].get("hikmat_courses_cache"))))
+            if not got.get("kv", {}).get("hikmat_courses_cache"):
+                probs.append("the server's lessons are not in IndexedDB")
+            elif not all(c.get("e2eLive") for c in _list(got["kv"]["hikmat_courses_cache"])):
+                probs.append("IndexedDB still holds the old lessons, not the ones the server sent")
 
     probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
     return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
              "the server's lessons and settings were taken on the full phone, and caching them removed nothing but "
-             "the content caches"))]
+             "the content caches" + (", and the lessons are cached in IndexedDB" if idb else "")))]
+
+
+# ---------------------------------------------------------------- Task 3: content caches -------
+
+# IndexedDB refuses to open, as in a WebView where it is switched off or broken. The content store
+# must fall back to localStorage, where the caches were before Task 3, and lose nothing.
+IDB_BLOCKED = ("/* e2e: IndexedDB refuses to open */(function(){IDBFactory.prototype.open=function(){"
+               "throw new DOMException('IndexedDB is blocked in this test','SecurityError');};})();")
+# IndexedDB opens, but refuses every write, as a phone whose disk is full does. A cache may leave
+# localStorage only once IndexedDB holds it, so here every cache must stay where it was.
+IDB_PUT_REFUSED = ("/* e2e: IndexedDB refuses every write */(function(){IDBObjectStore.prototype.put=function(){"
+                   "throw new DOMException('The quota has been exceeded.','QuotaExceededError');};})();")
+
+# What the content database holds, read without creating it: a build that never made it must not
+# have it made by the test. `store` is false when the database exists without its kv store.
+CONTENT_DB_JS = r"""async () => {
+  const names = (await indexedDB.databases()).map(d => d.name);
+  if (!names.includes("hikmat_content")) return { exists: false, store: false, kv: {} };
+  return await new Promise(res => {
+    const rq = indexedDB.open("hikmat_content");
+    rq.onerror = () => res({ exists: true, store: false, kv: {}, error: String(rq.error) });
+    rq.onsuccess = () => {
+      const db = rq.result;
+      if (!db.objectStoreNames.contains("kv")) { db.close(); return res({ exists: true, store: false, kv: {} }); }
+      const kv = {};
+      const cur = db.transaction("kv", "readonly").objectStore("kv").openCursor();
+      cur.onsuccess = () => { const c = cur.result; if (c) { kv[c.key] = c.value; c.continue(); }
+                              else { db.close(); res({ exists: true, store: true, kv }); } };
+      cur.onerror = () => { db.close(); res({ exists: true, store: true, kv, error: String(cur.error) }); };
+    };
+  });
+}"""
+
+# Where the content on screen came from. Every cache _marked_caches() seeds carries e2eCached, and
+# no file or server ever sends it, so content that has it can only have come from a cache.
+FROM_CACHE_JS = r"""() => ({
+  courses: COURSES.length,
+  coursesMarked: COURSES.length > 0 && COURSES.every(c => c && c.e2eCached === true),
+  bank: LEVEL_BANK.bank.length,
+  bankMarked: LEVEL_BANK.bank.length > 0 && LEVEL_BANK.bank.every(q => q && q.e2eCached === true),
+  bandsMarked: Array.isArray(BANDS) && BANDS.length > 0 && BANDS.every(b => b && b.e2eCached === true),
+})"""
+
+
+def _list(x):
+    return x if isinstance(x, list) else []
+
+
+def _raw(ph, *keys):
+    """The stored strings themselves. STORAGE_JS gives other keys as lengths, and a JS length counts
+    UTF-16 units where Python's counts characters, so the two never agree on text with emoji in it."""
+    return ph.page.evaluate("(ks) => ks.map(k => localStorage.getItem(k))", list(keys))
+
+
+def _content_db(ph, done=None, wait_s=3.0):
+    """CONTENT_DB_JS, read again for up to wait_s seconds until done(db) holds. Nothing awaits a
+    cache write, so one may still be on its way when the boot is over."""
+    end = time.monotonic() + wait_s
+    while True:
+        db = ph.page.evaluate(CONTENT_DB_JS)
+        if done is None or (db.get("store") and done(db)) or time.monotonic() >= end:
+            return db
+        ph.page.wait_for_timeout(100)
+
+
+@functools.lru_cache(maxsize=1)
+def _marked_caches():
+    """The three caches at real size, parsed, each item marked e2eCached (see FROM_CACHE_JS)."""
+    v = {k: json.loads(raw) for k, raw in cache_values().items()}
+    v["hikmat_courses_cache"] = [dict(c, e2eCached=True) for c in v["hikmat_courses_cache"]]
+    v["hikmat_structure_cache"] = dict(v["hikmat_structure_cache"],
+                                       bands=[dict(b, e2eCached=True) for b in v["hikmat_structure_cache"]["bands"]])
+    v["hikmat_testbank_cache"] = dict(v["hikmat_testbank_cache"],
+                                      bank=[dict(q, e2eCached=True) for q in v["hikmat_testbank_cache"]["bank"]])
+    return v
+
+
+def _cached_phone():
+    """v7-midway on a phone that has been online: the three marked caches and the settings cache."""
+    mid = load_fixture(SAVES / "v7-midway.json", "v7-midway")
+    local = dict(mid.local, hikmat_settings_cache=SETTINGS_CACHE)
+    local.update({k: compact(v) for k, v in _marked_caches().items()})
+    return Fixture("v7-midway with its caches", {"kind": "storage-snapshot", "note": "v7-midway, online before",
+                                                 "localStorage": local})
+
+
+def _go_offline(ph):
+    """No server and no bundled data files: whatever content the next launch shows, it read from a cache."""
+    ph.answer(r"^/api/method/hikmat\.api\.", abort=True)
+    ph.answer(r"^/assets/hikmat/(curriculum|testbank)\.json$", status=404)
+
+
+def _from_cache(ph, where):
+    """What is wrong with the content on screen, for content that must have come from a cache."""
+    seen = ph.page.evaluate(FROM_CACHE_JS)
+    out = []
+    if seen["courses"] != CURRICULUM_LEN or not seen["coursesMarked"]:
+        out.append("offline, the lessons are not the cached ones (%d tracks%s) although %s held them"
+                   % (seen["courses"], ", unmarked" if not seen["coursesMarked"] else "", where))
+    if seen["bank"] != TESTBANK_LEN or not seen["bankMarked"]:
+        out.append("offline, the test bank is not the cached one (%d questions%s) although %s held it"
+                   % (seen["bank"], ", unmarked" if not seen["bankMarked"] else "", where))
+    if not seen["bandsMarked"]:
+        out.append("offline, the grade bands are not the cached ones although %s held them" % where)
+    return out
+
+
+def caches_move_to_idb(env, sabotage=None, prelude=None):
+    """C1. A phone that has been online holds the three content caches in localStorage, beside her
+    progress, where a full phone made them cost her stars. The first launch moves each one into
+    IndexedDB, unchanged, and only then takes it out of localStorage. The settings cache is small
+    and stays. C4 then opens v7 on what the move left: v7 knows only the localStorage caches, so it
+    must fall back to the bundled curriculum and still show her the same stars, level and lessons."""
+    tag = "[%s] caches_move_to_idb" % env.mode
+    fx = _cached_phone()
+    caches = _marked_caches()
+    rollback = []
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        if "contentReady" not in ph.boot_result and "contentReadyError" not in ph.boot_result:
+            probs.append("the build has no contentReady, so nothing moves the caches")
+        after = ph.page.evaluate(STORAGE_JS)["keys"]
+        left = [k for k in CACHE_KEYS if k in after]
+        if left:
+            probs.append("%s still in localStorage" % _keys(left))
+        if _raw(ph, "hikmat_settings_cache") != [SETTINGS_CACHE]:
+            probs.append("hikmat_settings_cache was moved or changed, and it stays in localStorage")
+        db = _content_db(ph, lambda d: all(k in d["kv"] for k in CACHE_KEYS))
+        if not db.get("store"):
+            probs.append("IndexedDB has no hikmat_content database with a kv store%s"
+                         % ((": " + _line(db["error"], 80)) if db.get("error") else ""))
+        else:
+            for k in CACHE_KEYS:
+                if k not in db["kv"]:
+                    probs.append("%s is not in IndexedDB" % k)
+                elif db["kv"][k] != caches[k]:
+                    probs.append("%s changed on its way into IndexedDB: %s" % (k, _clip(diff(caches[k], db["kv"][k], values=False), 2)))
+        probs.extend(_states_kept(fx, after))
+        new = ph.snap()
+        ph.launch("old")
+        old = ph.snap()
+        if old["coursesLen"] != CURRICULUM_LEN:
+            rollback.append("v7 shows %d tracks, not the %d of curriculum.json" % (old["coursesLen"], CURRICULUM_LEN))
+        if old["total"] != new["total"] or old["level"] != new["level"]:
+            rollback.append("v7 shows %s stars at level %s, the new build %s at level %s"
+                            % (old["total"], old["level"], new["total"], new["level"]))
+        shut = [x for x in new["playedOpen"] if x not in old["playedOpen"]]
+        if shut:
+            rollback.append("v7 shuts %d lessons she played: %s" % (len(shut), _clip(["/".join(x) for x in shut], 3)))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    out = [("C1", not probs, "%s C1 %s" % (tag, _clip(probs, 4) if probs else
+            "the three caches moved into IndexedDB unchanged and left localStorage, the settings cache stayed, "
+            "and every saved state is intact"))]
+    if not probs or rollback:
+        out.append(("C4", not rollback, "%s C4 %s" % (tag, _clip(rollback, 3) if rollback else
+                    "v7, opened on what the move left, shows every track of curriculum.json and the same stars, "
+                    "level and played lessons")))
+    return out
+
+
+def offline_uses_idb_cache(env, sabotage=None, prelude=None):
+    """C2. After the move, a launch with no server and no bundled data files. Everything she sees
+    must come from IndexedDB: the lessons, the grade bands and the test bank."""
+    tag, code = "[%s] offline_uses_idb_cache" % env.mode, "C2"
+    fx = _cached_phone()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        left = [k for k in CACHE_KEYS if k in ph.page.evaluate(STORAGE_JS)["keys"]]
+        if left:
+            probs.append("%s still in localStorage after the first launch, so this launch could read them there" % _keys(left))
+        _go_offline(ph)
+        ph.launch("new")
+        probs.extend(_from_cache(ph, "IndexedDB"))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "with no server and no data files, the lessons, grade bands and test bank all came from IndexedDB"))]
+
+
+def idb_blocked_falls_back(env, sabotage=None, prelude=None):
+    """C3. The C1 phone where IndexedDB refuses to open (C3), and where it opens but refuses every
+    write (C3b). Content still loads with no page error, every cache stays in localStorage exactly
+    as it was, since there is nowhere it could go, and offline the game still reads them there."""
+    out = []
+    for code, block, what in (("C3", IDB_BLOCKED, "IndexedDB blocked"), ("C3b", IDB_PUT_REFUSED, "IndexedDB refusing writes")):
+        tag = "[%s] idb_blocked_falls_back (%s)" % (env.mode, what)
+        fx = _cached_phone()
+
+        def steps(ph, probs):
+            ph.seed(fx)
+            ph.launch("new")
+            after = ph.page.evaluate(STORAGE_JS)["keys"]
+            gone = [k for k, v in zip(CACHE_KEYS, _raw(ph, *CACHE_KEYS)) if v != fx.local[k]]
+            if gone:
+                probs.append("%s left localStorage or changed, with nowhere to go" % _keys(gone))
+            probs.extend(_states_kept(fx, after))
+            _go_offline(ph)
+            ph.launch("new")
+            probs.extend(_from_cache(ph, "localStorage"))
+
+        probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=block + (prelude or "")), steps)
+        out.append((code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+                    "content loaded with no page error, every cache stayed in localStorage as it was, and offline "
+                    "the game read them there")))
+    return out
+
+
+@test("caches_move_to_idb")
+def t_caches_move_to_idb(env, report):
+    for _code, ok, msg in caches_move_to_idb(env):
+        report.check(ok, msg)
+
+
+@test("offline_uses_idb_cache")
+def t_offline_uses_idb_cache(env, report):
+    for _code, ok, msg in offline_uses_idb_cache(env):
+        report.check(ok, msg)
+
+
+@test("idb_blocked_falls_back")
+def t_idb_blocked_falls_back(env, report):
+    for _code, ok, msg in idb_blocked_falls_back(env):
+        report.check(ok, msg)
 
 
 @test("storage_full_drops_caches")
@@ -2040,8 +2285,9 @@ def t_retire_under_full_storage(env, report):
 
 @test("storage_full_live_content")
 def t_storage_full_live_content(env, report):
-    for _code, ok, msg in storage_full_live_content(env):
-        report.check(ok, msg)
+    for idb in (True, False):
+        for _code, ok, msg in storage_full_live_content(env, idb=idb):
+            report.check(ok, msg)
 
 
 @test("erase_while_fold_pending")
@@ -2124,6 +2370,15 @@ LATE_QUEUE_DROP = ("/* e2e self-test: the queues go after the fold */(function()
                    "Storage.prototype.removeItem=function(k){var me=this;"
                    "if(/_queue$|^hikmat_social_pending$/.test(String(k))){setTimeout(function(){r.call(me,k);},0);return;}"
                    "return r.apply(this,arguments);};})();")
+# The move copies the caches into IndexedDB but never takes them out of localStorage, so they
+# still crowd her progress there. Storage-level, and before the game's scripts, so it reaches the
+# move however early it runs.
+KEEP_CACHES = ("/* e2e self-test: the caches never leave localStorage */(function(){var r=Storage.prototype.removeItem;"
+               "Storage.prototype.removeItem=function(k){if(/^hikmat_(courses|structure|testbank)_cache$/.test(String(k)))return;"
+               "return r.apply(this,arguments);};})();")
+# The content store is written but never read back: every read finds nothing, so offline the game
+# has only its small bundled fallback, as if the caches had been thrown away.
+UNREAD_STORE = _sab("the content store is never read back", "contentStore.get=function(){return Promise.resolve(null);};")
 # dropContentCaches() takes the settings cache too, which is not one of the three it may drop.
 DROP_SETTINGS_TOO = _sab("making room also drops the settings cache",
                          "var real=dropContentCaches;dropContentCaches=function(){real();"
@@ -2249,8 +2504,15 @@ def t_self_test(env, report):
            ["S3"], [("S3", "hikmat_current")])
     judged("an account fold that makes room by deleting other keys", retire_under_full_storage(env, prelude=GREEDY_STORAGE),
            ["S3"], [("S3", "removed to make room")])
-    judged("a lessons cache written with a bare setItem again", storage_full_live_content(env, sabotage=BARE_CACHE_WRITE),
-           ["S4"], [("S4", "backendLive")])
+    # Since Task 3 the lessons cache is written by contentStore.set(), outside loadFromBackend()'s
+    # try, so a bare setItem that throws can no longer skip the settings or clear backendLive. It
+    # surfaces as an unhandled rejection instead, a page error naming the quota.
+    judged("a lessons cache written with a bare setItem again", storage_full_live_content(env, sabotage=BARE_CACHE_WRITE, idb=False),
+           ["S4b"], [("S4b", "QuotaExceededError")])
+    judged("caches copied into IndexedDB but never taken out of localStorage", caches_move_to_idb(env, prelude=KEEP_CACHES),
+           ["C1"], [("C1", "still in localStorage")])
+    judged("a content store that is never read back", offline_uses_idb_cache(env, sabotage=UNREAD_STORE),
+           ["C2"], [("C2", "never loaded")])
     judged("Start fresh that leaves a waiting account fold in place", erase_while_fold_pending(env, sabotage=KEEP_WAITING_FOLD),
            ["S5"], [("S5", "waiting fold landed")])
     carried = _carried(load_fixture(SAVES / "retired-account.json", "retired-account"))

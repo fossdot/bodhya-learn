@@ -1855,9 +1855,10 @@ let _lvCache = {};        // per-level rollup memo — see dropLevelCache / leve
 
 // Rule 4 of docs/progress-logic.md: guard every write. A full localStorage makes setItem throw,
 // and a save that throws keeps nothing. The stars of the game she has just finished are gone,
-// and the game stops wherever the throw left it. Her progress shares this storage with three
-// content caches, and all three can be rebuilt: the lessons and the test bank from the bundled
-// curriculum.json and testbank.json, the grade bands from the defaults at the top of this file,
+// and the game stops wherever the throw left it. Her progress can share this storage with three
+// content caches: a build before v8 kept them here, and they stay here wherever IndexedDB will
+// not take them (see contentStore below). All three can be rebuilt: the lessons and the test bank
+// from the bundled curriculum.json and testbank.json, the grade bands from the defaults at the top of this file,
 // and all of them from the server whenever it answers. So when a write does not fit, the caches
 // go and the write is tried once more. Nothing else is ever removed to make room: not a saved
 // state, not a setting, and not a key this build does not know.
@@ -1876,6 +1877,85 @@ function dropContentCaches(){
     try { localStorage.removeItem(k); } catch(e){}
   });
 }
+// Rule 5 of docs/progress-logic.md: content caches never share her progress's space. The lessons,
+// the grade structure and the test bank are about 2 MB, and in localStorage they sat in the same
+// few megabytes as her stars, which is how a full phone came to refuse her saves. They live in
+// IndexedDB instead: database hikmat_content, store kv, keyed by the old localStorage names, values
+// stored as the parsed objects. Nothing else uses that database. Where IndexedDB is missing or
+// will not open, everything falls back to localStorage as before, through writeLocal(), so the
+// game works exactly as it did. Every method resolves; none rejects.
+const contentStore = (function(){
+  let dbp = null;
+  function db(){
+    if(!dbp) dbp = new Promise(resolve => {
+      try {
+        const rq = indexedDB.open("hikmat_content", 1);
+        rq.onupgradeneeded = () => { try { rq.result.createObjectStore("kv"); } catch(e){} };
+        rq.onsuccess = () => resolve(rq.result);
+        rq.onerror = () => resolve(null);
+        rq.onblocked = () => resolve(null);
+      } catch(e){ resolve(null); }
+    });
+    return dbp;
+  }
+  // True only once the write is committed, so a caller may act on it (the move below does).
+  function idbSet(key, value){
+    return db().then(d => new Promise(resolve => {
+      if(!d) return resolve(false);
+      try {
+        const tx = d.transaction("kv", "readwrite");
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = tx.onabort = () => resolve(false);
+        tx.objectStore("kv").put(value, key);
+      } catch(e){ resolve(false); }
+    }));
+  }
+  function idbGet(key){
+    return db().then(d => new Promise(resolve => {
+      if(!d) return resolve(undefined);
+      try {
+        const rq = d.transaction("kv", "readonly").objectStore("kv").get(key);
+        rq.onsuccess = () => resolve(rq.result);
+        rq.onerror = () => resolve(undefined);
+      } catch(e){ resolve(undefined); }
+    }));
+  }
+  function localGet(key){
+    try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? null : v; } catch(e){ return null; }
+  }
+  return {
+    idbSet,
+    // IndexedDB first. localStorage after it, for a cache the move could not take: IndexedDB
+    // missing, or refusing writes.
+    get(key){ return idbGet(key).then(v => v != null ? v : localGet(key)); },
+    // A cache that will not go into IndexedDB goes where it always went, so it is not lost. The
+    // value is copied through JSON at once, as the localStorage write always did: the put happens
+    // only after the database opens, and the copy keeps a later change to COURSES out of the cache.
+    set(key, value){
+      let json; try { json = JSON.stringify(value); } catch(e){ return Promise.resolve(false); }
+      return idbSet(key, JSON.parse(json)).then(ok => {
+        if(ok){ try { localStorage.removeItem(key); } catch(e){} return true; }
+        return writeLocal(key, json);
+      });
+    },
+  };
+})();
+// Moves each of the three caches out of localStorage once. Each one is parsed and written to
+// IndexedDB, and only after IndexedDB has committed it is it removed from localStorage, so a move
+// that fails halfway leaves the cache where it was. One that will not parse is removed: it is
+// useless, and like any of these three it is rebuilt from the bundled files or the server. Every
+// read of a cache awaits this first. hikmat_settings_cache is small and stays in localStorage.
+const contentReady = (async function(){
+  for(const key of ["hikmat_courses_cache", "hikmat_structure_cache", "hikmat_testbank_cache"]){
+    let raw = null;
+    try { raw = localStorage.getItem(key); } catch(e){}
+    if(raw == null) continue;
+    let value = null;
+    try { value = JSON.parse(raw); } catch(e){}
+    if(value == null){ try { localStorage.removeItem(key); } catch(e){} continue; }
+    if(await contentStore.idbSet(key, value)){ try { localStorage.removeItem(key); } catch(e){} }
+  }
+})();
 // Rule 6 keeps a second copy of every save outside the WebView. That copy does not exist yet in
 // this build, so this does nothing. save() still calls it for every save, the refused ones too,
 // because on a full phone the second copy is the only place a refused save can still go.
@@ -2210,14 +2290,15 @@ function buildPaper(n){
   return { clientId: uid(), qs, reused: bankFirst.length < want };
 }
 function qSecs(q, n){ const r = levelRules(n).secs || {}; return q.d==="e" ? (r.easy||20) : q.d==="h" ? (r.hard||45) : (r.medium||30); }
-// The bank follows the curriculum's own three-layer contract: localStorage cache → the
+// The bank follows the curriculum's own three-layer contract: the cache (contentStore) → the
 // SW-precached static file → the live API. Each layer overwrites the previous only when it
 // returns something, so going offline never loses the bank; and no layer is required — with
 // none of them the tests still run on the lessons' own quiz items (levelPool).
 function applyTestBank(b){ if(b && Array.isArray(b.bank) && Array.isArray(b.levels) && (b.bank.length || b.levels.length)){ LEVEL_BANK = { levels: b.levels, bank: b.bank }; dropLevelCache(); return true; } return false; }
 async function loadTestBank(){
   let have = false;
-  try { have = applyTestBank(JSON.parse(localStorage.getItem(TESTBANK_KEY))); } catch(e){}
+  await contentReady;
+  try { have = applyTestBank(await contentStore.get(TESTBANK_KEY)); } catch(e){}
   if(!have){
     try { const r = await fetch(assetURL("testbank.json"), {headers:{Accept:"application/json"}});
           if(r.ok) have = applyTestBank(await r.json()); } catch(e){}
@@ -2225,7 +2306,7 @@ async function loadTestBank(){
   try {
     const r = await apiFetch(apiURL("get_test_bank"), {headers:{Accept:"application/json"}});
     if(r.ok){ const j = (await r.json()).message;
-              if(applyTestBank(j)){ try { localStorage.setItem(TESTBANK_KEY, JSON.stringify(j)); } catch(e){} } }
+              if(applyTestBank(j)) contentStore.set(TESTBANK_KEY, j); }
   } catch(e){}
   if(typeof refreshTop === "function") refreshTop();
 }
@@ -6738,11 +6819,16 @@ async function api(method, params, post){
 
 async function loadFromBackend(){
   // 1) cached content + settings first → instant and works offline (logo, name, taglines persist)
+  //    The settings cache is small and stays in localStorage, read at once as before. The lessons
+  //    and structure caches are in IndexedDB (contentStore), read once the move out of
+  //    localStorage (contentReady) is done.
   let haveCache = false;
-  try { const c = JSON.parse(localStorage.getItem(CACHE_KEY)); if(Array.isArray(c) && c.length){ COURSES = c; haveCache = true; } } catch(e){}
-  try { const st = JSON.parse(localStorage.getItem(STRUCT_KEY)); if(st && st.bands && st.bands.length){ BANDS = st.bands; SUBJECTS = st.subjects || SUBJECTS; } } catch(e){}
   try { const s = JSON.parse(localStorage.getItem("hikmat_settings_cache"));
         if(s && s.appName){ SETTINGS.appName = s.appName; SETTINGS.logo = s.logo || ""; if(s.taglineEn) SETTINGS.tagline.en = s.taglineEn; if(s.taglineHi) SETTINGS.tagline.hi = s.taglineHi; SETTINGS.aiEnabled = !!s.aiEnabled; SETTINGS.voiceEnabled = !!s.voiceEnabled; if(Array.isArray(s.milestones)) SETTINGS.milestones = s.milestones; applySettingsDefaults(s); } } catch(e){}
+  await contentReady;
+  const [c, st] = await Promise.all([contentStore.get(CACHE_KEY), contentStore.get(STRUCT_KEY)]);
+  if(Array.isArray(c) && c.length){ COURSES = c; haveCache = true; }
+  if(st && st.bands && st.bands.length){ BANDS = st.bands; SUBJECTS = st.subjects || SUBJECTS; }
   // 1b) durable offline baseline: the full curriculum shipped as a static file (precached by the
   //     service worker). Without this, a first-ever-offline launch or a localStorage wipe would fall
   //     back to the tiny bundled COURSES (4 tracks) instead of all lessons.
@@ -6766,21 +6852,22 @@ async function loadFromBackend(){
       if(j && Array.isArray(j.message) && j.message.length){
         COURSES = j.message;
         dropLevelCache();                       // new content → new per-level rollups
-        // Through writeLocal(), because a bare setItem threw on a full phone, and that throw
-        // skipped the structure and settings below and reported a server that had answered as
-        // unreachable. writeLocal() makes room only by dropping the content caches themselves,
-        // so on a full phone this write also drops the structure and test-bank caches, even a
-        // bank loadTestBank() has only just fetched. That costs her nothing she has earned:
-        // offline the bands fall back to the defaults at the top of this file and the bank to
-        // testbank.json, and the next answer from the server caches both again.
-        writeLocal(CACHE_KEY, JSON.stringify(COURSES));
+        // Into IndexedDB, not awaited. Only where IndexedDB will not take it does it go back to
+        // localStorage, through writeLocal(), because a bare setItem threw on a full phone, and
+        // that throw skipped the structure and settings below and reported a server that had
+        // answered as unreachable. writeLocal() makes room only by dropping the content caches
+        // themselves, so on a full phone with no IndexedDB this write also drops the structure
+        // and test-bank caches, even a bank loadTestBank() has only just fetched. That costs her
+        // nothing she has earned: offline the bands fall back to the defaults at the top of this
+        // file and the bank to testbank.json, and the next answer from the server caches both again.
+        contentStore.set(CACHE_KEY, COURSES);
       }
     }
     if(xr.ok){
       const x = (await xr.json()).message;
       if(x && Array.isArray(x.bands) && x.bands.length){
         BANDS = x.bands; SUBJECTS = x.subjects || SUBJECTS;
-        try { localStorage.setItem(STRUCT_KEY, JSON.stringify(x)); } catch(e){}
+        contentStore.set(STRUCT_KEY, x);
       }
     }
     if(sr.ok){

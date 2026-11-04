@@ -168,6 +168,14 @@ Tests that replay real saves through the update must prove that no star total dr
 - [ ] **Step 4: Run** everything. Expected: PASS.
 - [ ] **Step 5: Commit:** "Lesson caches move out of her progress's space".
 
+**As built (4 Nov):**
+- C3 also has a second case, C3b, where IndexedDB opens but refuses every write. The caches must stay in localStorage, because a cache leaves only once IndexedDB has committed it.
+- C4 runs inside C1: v7 is opened on what the move left.
+- S1 now runs with IndexedDB blocked. With IndexedDB working, the launch moves the caches out and that alone makes room, so a full phone still holding its caches at her next save exists only where IndexedDB is missing.
+- S4 now has two cases. S4 is IndexedDB working, and the server's lessons must land in IndexedDB. S4b is IndexedDB blocked, which is the old S4; the bare-setItem sabotage now targets S4b.
+- New self-test sabotages: caches copied but never removed (C1), and a store that is never read back (C2).
+- The harness compares cache values as raw strings. STORAGE_JS reports other keys as lengths, and JS and Python count lengths differently for emoji.
+
 ### Task 4: Native mirror, boot snapshot, launch merge, erase marker, backup rules (rules 2, 6, 8)
 
 **Files:**
