@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 7–11 (API 24–30) backup scope, referenced by android:fullBackupContent.
+
+  This is the file that matters most in practice: minSdk is 24 and the phones this app is built
+  for in Champaran are overwhelmingly pre-Android-12, so for most learners THIS decides whether
+  a reinstall gets their stars back. Android 12+ reads data_extraction_rules.xml instead — keep
+  the two in step, and see that file for the full reasoning and for the data-deletion-page
+  precondition that must be met before a build carrying either of them is rolled out.
+-->
+<full-backup-content>
+    <include domain="root" path="app_webview" />
+</full-backup-content>

@@ -50,3 +50,13 @@ tests/saves/*.[jJ][sS][oO][nN]
 # Save my progress names its file bodhya-progress-YYYY-MM-DD.json. Wherever one lands in this tree,
 # it is a child's progress.
 bodhya-progress-*
+
+# ---- android-app/ (Capacitor) -------------------------------------------------
+# Signing material lives outside git; see android-app/README.md. These are a backstop, alongside
+# the patterns above. keystore.prop* covers keystore.properties and every variant of it, including
+# keystore.properties.old-fossunited.
+*keystore.prop*
+local.properties
+google-services.json
+.gradle/
+android-app/android/app/build/

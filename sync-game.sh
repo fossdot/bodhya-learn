@@ -9,12 +9,12 @@ cp "$SRC" "$ROOT/index.html"
 cp "$SRC" "$ROOT/hikmat/public/game.html"
 echo "synced $SRC → index.html + hikmat/public/game.html"
 
-# THIRD copy: the Capacitor bundle inside the Android app. It is a separate checkout outside
-# this repo, so it used to be invisible here — and it silently fell 3 weeks / 1008 lines behind,
-# which would have shipped a Play Store build missing a data-loss fix and an XSS fix, plus a
+# THIRD copy: the Capacitor bundle inside the Android app, android-app/ in this repo. It used to be
+# a separate checkout outside the repo, invisible here, and it silently fell 3 weeks / 1008 lines
+# behind, which would have shipped a Play Store build missing a data-loss fix and an XSS fix, plus a
 # curriculum stuck at 89 of 283 lessons. Re-bundle it whenever the game changes.
-# Skipped without complaint when the Android checkout isn't present (CI, another machine).
-ANDROID_APP="${HIKMAT_ANDROID_APP:-$(cd "$(dirname "$SRC")" && pwd)/android-app}"
+# bundle-game.js needs only node, not node_modules, so this works on any machine with node.
+ANDROID_APP="${HIKMAT_ANDROID_APP:-$ROOT/android-app}"
 if [ -f "$ANDROID_APP/bundle-game.js" ]; then
   if command -v node >/dev/null 2>&1; then
     ( cd "$ANDROID_APP" && node bundle-game.js ) \
