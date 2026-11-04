@@ -27,7 +27,9 @@ Tests that replay real saves through the update must prove that no star total dr
 - Every "Must exist" key was found and every "Must be free" key is free.
 - Identity: `appId` and `applicationId` are `net.bodhya.learn`, `androidScheme` is `https`, and there is no `hostname`, so Capacitor's default `localhost` applies.
 - Vishal reviewed the first plan and added: the boot race, rollback playedOpen, erase sheet with 7-day undo, Hindi copy, and closed testing first.
-- D1–D6 are accepted. Q1 (android-app in git) and Q2 (pin hostname) are still open, so don't do Task 0 or pin the hostname.
+- D1–D6 are accepted.
+
+**Status, 4 Nov:** Q1 and Q2 are answered yes (see Open questions), so Task 0 is no longer blocked. Vishal added N6b (erase with a waiting fold and a stale mirror at once) and N9 (boot save on an empty WebView) to Task 4. The five additions from the first review are all in: the boot race (BOOT_STATE, the mirror gate, N8, N9), playedOpen in R, the erase sheet with 7-day undo (Task 6), neutral Hindi (the save-file line uses "रखा जा सकता है"), and closed testing first (Task 7). बोध्या was checked on 4 Nov: it is the only Devanagari spelling in the game, the Play listing docs and the feature graphic. The wordmark is Latin only.
 
 ## Global Constraints
 
@@ -75,7 +77,11 @@ Tests that replay real saves through the update must prove that no star total dr
 
 ---
 
-### Task 0: put `android-app/` under git (blocked on Q1; skip)
+### Task 0: put `android-app/` under git (Q1: yes)
+
+- Copy `android-app/` into `apps/hikmat/android-app/` without signing material, generated output or `node_modules`. Point `sync-game.sh` and `build.sh` at the copy in the repo.
+- The keystores stay outside the repo. Run a secret scan and show Vishal the staged file list before committing.
+- Pin `"hostname": "localhost"` in `capacitor.config.json` (Q2), in its own commit.
 
 ### Task 1: Harness, fixtures and update invariants
 
@@ -193,15 +199,26 @@ Tests that replay real saves through the update must prove that no star total dr
   - **N5 `relaunch_does_not_inflate`**: three launches leave `attempts`, coins and `testSeen` lengths unchanged.
   - **N6 `erase_stays_erased`**: erase, with `drop_next_write` on. Until Task 6 that means `#progWipe` twice; after it, the confirm sheet. After a relaunch the total is 0 and `eraseGen` is 1. After another normal relaunch it is still 0.
   - **N7 `full_storage_native_carries`**: S2, then relaunch. The star is in `state`.
+    - **N6b `erase_with_waiting_fold_and_stale_mirror`**: the 232-star bug was a merge that ran after an erase, and the launch merge is the same kind of merge, so all three happen at once here.
+      - Setup: the S5 phone (retired-account, full, with nothing to drop, so the fold waits and `hikmat_current` stays). Native holds a stale copy of the guest profile from before the erase, with its stars and `eraseGen` 0. `drop_next_write` is on.
+      - Erase through the menu, then free room and relaunch twice.
+      - Both launches show 0 stars and 0 gems, with gender Male and mascot kabir. `eraseGen` is at least 1 in local and, after the second launch, in native too. Neither the account's 232 stars nor the stale mirror's stars come back.
+      - If neither local nor native took the erase, she is told it failed ("Could not erase. Try again."), never "Progress erased", and the next launch shows her stars as before.
+      - Self-test sabotages: a `mergeCopy` that ignores `eraseGen` must fail N6b, and so must an erase that skips `endAccountFold()`.
   - **N8 `boot_save_cannot_clobber_native`**:
     - Setup: native holds v7-midway with `get_delay_ms=1500`. localStorage is the retired-account fixture without `hikmat_state_guest`.
     - During the delay, `retireAccounts` folds S-0042 into a new guest key, and the test calls `save()` too. Assert that the `NATIVE` log shows no `set` before the `get` resolved.
     - After restore: every star is ≥ both v7-midway and S-0042; settings, gender and mascot equal v7-midway's (native won as base); and native equals local.
+  - **N9 `boot_save_on_empty_webview`**: N8 starts from a WebView that still holds an account, so this is the plain case.
+    - Setup: localStorage completely empty (the WebView's data was wiped), native holds v7-midway with `get_delay_ms=1500`.
+    - During the delay, boot writes whatever a first launch writes, and the test calls `save()` as well.
+    - Assert: `BOOT_STATE` was recorded before the first `setItem` (an init script logs the order), so `localWasMissing` is true. The `NATIVE` log shows no `set` before the `get` resolved. After restore, `SNAP` equals v7-midway's, settings included, native equals local, and no first-run screen is left open.
+    - Self-test sabotage: a mirror gate that opens before the read must fail N9.
   - **M1:** `mergeSavedState(a, clone(a), {sameLearner:true})` deep-equals `a`.
   - **M2:** without opts, attempts still add up.
   - **M3:** `mergeCopy` follows the eraseGen rules in both directions.
   - **W1 (web):** no Capacitor, so `nativeRestore` resolves false and there's no `pageerror`.
-- [ ] **Step 2: Run.** Expected: N1–N8 and M3 fail, and M2 and W1 pass.
+- [ ] **Step 2: Run.** Expected: N1–N9 (with N6b) and M3 fail, and M2 and W1 pass.
 - [ ] **Step 3: Implement.** The erase handler sets `eraseGen + 1`, calls `save()`, and awaits `mirrorNow` before it says "Progress erased."
 - [ ] **Step 4: Run** everything in both modes. Expected: PASS.
 - [ ] **Step 5: Commit:** "Every save gets a second copy outside the WebView, and it can't overwrite one it hasn't read".
@@ -347,7 +364,7 @@ Tests that replay real saves through the update must prove that no star total dr
   - Start fresh keeps an undo copy for 7 days.
   - Uninstalling, or Clear storage, removes everything at once.
 
-## Open questions
+## Open questions (answered 4 Nov)
 
-- **Q1.** Should `android-app/` move into bodhya-learn, with no signing material? I recommend yes. Until then, the Android half of this step can't go through a PR.
-- **Q2.** Should `"hostname": "localhost"` be pinned in `capacitor.config.json`? It's today's default, so nothing changes. Until you decide, it stays unpinned.
+- **Q1.** Should `android-app/` move into bodhya-learn, with no signing material? **Yes.** The keystores, `keystore.properties` and the credentials files stay outside git; the ignore list covers `keystore/`, `*.jks`, `*.keystore`, every `keystore.prop*`, `local.properties`, `google-services.json`, `node_modules/`, `build/`, `.gradle/` and `android/app/build/`.
+- **Q2.** Should `"hostname": "localhost"` be pinned in `capacitor.config.json`? **Yes**, with `"androidScheme": "https"` kept explicit. Both are today's values, so the origin, and the localStorage under it, does not change.
