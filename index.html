@@ -1887,6 +1887,10 @@ function save(){
   dropLevelCache();
   const key = stateKey(), json = JSON.stringify(state);
   const kept = writeLocal(key, json);
+  // Start fresh while an account fold waited for room (eraseWaitingFold): the fold ends with the
+  // first save that lands, because that save is the one that holds the guide and Hindi form she
+  // took from the account. Until then hikmat_current can be the only copy of both.
+  if(kept && endFoldWhenKept){ endFoldWhenKept = false; endAccountFold(); }
   mirrorState(key, json);
   return kept;
 }
@@ -1970,11 +1974,7 @@ function retireAccounts(){
     let mine = null, device = null;
     try { mine = JSON.parse(localStorage.getItem(stateKeyFor(currentStudent.id))); } catch(e){}
     try { device = JSON.parse(localStorage.getItem(stateKeyFor(null))); } catch(e){}
-    const merged = mergeSavedState(device || {}, mine);
-    // Her guide and the way Hindi addresses her belong to HER, not to the account — carry them
-    // across, or she is greeted by a different friend on the first launch after the update.
-    if(!merged.gender && currentStudent.gender) merged.gender = currentStudent.gender;
-    if(!merged.mascot && currentStudent.mascot) merged.mascot = currentStudent.mascot;
+    const merged = carryMascotAndGender(mergeSavedState(device || {}, mine), currentStudent);
     // The fold is her progress, so it goes through writeLocal() like every save. If even that
     // cannot make room, hikmat_current stays, and the next launch folds again. That is safe to
     // repeat: the guest profile never took this fold, so the next one counts each attempt once.
@@ -1989,12 +1989,42 @@ function retireAccounts(){
     currentStudent = null;
   }
 }
+// Her guide and the way Hindi addresses her belong to HER, not to the account. The fold carries
+// them into the device profile, or she is greeted by a different friend on the first launch after
+// the update. Where the device profile already has its own, that one stays. The fold takes them
+// from hikmat_current, and that can be the only copy this phone has: the account's own key holds
+// them only when the build she signed in with saved them there too.
+function carryMascotAndGender(into, acct){
+  if(acct && !into.gender && acct.gender) into.gender = acct.gender;
+  if(acct && !into.mascot && acct.mascot) into.mascot = acct.mascot;
+  return into;
+}
+// The account whose fold is still waiting for room, or null. With accounts off, retireAccounts()
+// leaves hikmat_current in storage only while its fold has not landed. It is read the way the
+// top of this section reads it, so a fold waits here exactly when the next launch would fold.
+function waitingAccount(){
+  if(AUTH_ENABLED) return null;
+  try { return JSON.parse(localStorage.getItem("hikmat_current")) || null; } catch(e){ return null; }
+}
+// Start fresh erases every star on this phone, and a fold still waiting for room holds some of
+// them. Left waiting, it would land on the next launch with room, inside the profile she has just
+// erased. So the erase takes the fold with it, and leaves what a fold that landed before the erase
+// would have left: the erased profile, with the guide and Hindi form the fold carries, and the
+// account's own key untouched. `into` is the erased state, before it is saved. hikmat_current goes
+// with the first save that lands (see save()), never before: until then it can be the only copy
+// of that guide and Hindi form. If localStorage refuses every save until she closes the app,
+// nothing of the erase was stored, the fold still waits, and the phone is as it was before it.
+let endFoldWhenKept = false;
+function eraseWaitingFold(into){
+  const acct = waitingAccount();
+  if(!acct) return;
+  carryMascotAndGender(into, acct);
+  endFoldWhenKept = true;
+}
 // The one place hikmat_current goes while accounts are off. While it is there, the fold above
-// has not landed. It goes once the fold lands, and also when she erases her progress first: the
-// erase covers the stars the fold would bring, just as it would if the fold had landed before
-// it. Left waiting, the fold would land on the next launch with room, inside the profile she has
-// just erased. The account's own key stays either way. With accounts on, hikmat_current is
-// whoever is signed in, and erasing her progress must not sign her out.
+// has not landed. It goes once the fold lands, or once an erase that took the fold with it is
+// stored. The account's own key stays either way. With accounts on, hikmat_current is whoever
+// is signed in, and erasing her progress must not sign her out.
 function endAccountFold(){
   if(AUTH_ENABLED) return;
   try { localStorage.removeItem("hikmat_current"); } catch(e){}
@@ -3728,9 +3758,10 @@ function openProgressSheet(){
     const keep = { lang: state.lang, sound: state.sound, theme: state.theme,
                    gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
     state = Object.assign(fresh(), keep);
+    // "Every star on this phone" includes an account fold still waiting for room. Its stars go
+    // with hers, and the guide and Hindi form it carries stay, as they would had it landed first.
+    eraseWaitingFold(state);
     save();
-    // "Every star on this phone" includes an account fold still waiting for room.
-    endAccountFold();
     sfx.back(); close(); renderHome();
     srSay(tx("Progress erased.","प्रगति मिटा दी गई।"));
   };

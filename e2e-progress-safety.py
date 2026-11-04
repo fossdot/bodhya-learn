@@ -40,7 +40,7 @@ and with "direct" for the second run:
       played lesson open, and the full curriculum
 and every launch must be free of page errors and console errors, and boot with the full curriculum.
 
-Task 2 adds six tests of a full localStorage (rule 4: guard every write), each on a fresh phone:
+Task 2 adds seven tests of a full localStorage (rule 4: guard every write), each on a fresh phone:
   S1  storage_full_drops_caches   full, with the three content caches in it: a new star is still
       kept, because the save drops those caches and writes again. Nothing else goes to make room,
       not even the settings cache such a phone also holds
@@ -52,9 +52,14 @@ Task 2 adds six tests of a full localStorage (rule 4: guard every write), each o
   S4  storage_full_live_content   the S1 phone online: caching the server's lessons cannot throw,
       so the settings it sent are applied and the server counts as reached
   S5  erase_while_fold_pending    the S3 phone, and she taps Start fresh while the fold still
-      waits: the erase ends the fold too, so no launch with room brings the account's stars back
+      waits: the erase ends the fold too, so no launch with room brings the account's stars back,
+      and it keeps the account's guide and Hindi form, which only hikmat_current held. The profile
+      it leaves is the one a phone leaves where the fold landed first and she then erased
   S6  retire_frees_queue_room     an old signed-in account on a phone full of its own unsent queue:
       the queue goes before the fold is written, so the fold lands in its room on the first launch
+  S7  erase_refused_while_fold_pending   the S5 phone with no guest profile, so localStorage
+      refuses the erase itself: hikmat_current stays until a save that holds its guide and Hindi
+      form has landed, and the fold ends with that save
 
 Nothing here needs a server or the network. A static server serves hikmat/public/ under
 /assets/hikmat/, which is where Frappe serves it and where the Android bundle copies it, so the
@@ -1673,7 +1678,61 @@ def start_fresh(page):
     return ""
 
 
-SHOWN_JS = r"""() => ({ total: totalStars(), coins: state.coins || 0 })"""
+SHOWN_JS = r"""() => ({ total: totalStars(), coins: state.coins || 0,
+                        gender: state.gender || null, mascot: state.mascot || null })"""
+
+
+def _carried(fx):
+    """{gender, mascot}: S-0042's guide and Hindi form, which the fold carries into the guest
+    profile and Start fresh keeps. In this fixture only hikmat_current holds them, as on a phone
+    signed in with a build that kept them nowhere else, and an erase that removes hikmat_current
+    first loses them for good. A fixture where a saved state held them too could not show that, so
+    it is refused."""
+    want = {f: _dict(_parsed(fx.local.get("hikmat_current"))).get(f) for f in ("gender", "mascot")}
+    if not all(want.values()) or any(_dict(st).get(f) for st in fx.seed_states.values() for f in want):
+        raise RuntimeError("%s must hold a gender and a mascot in hikmat_current and in no saved state" % fx.name)
+    return want
+
+
+class _Carry:
+    """Checks that a state, stored or held in memory, has the guide and Hindi form in `want`
+    (_carried), and reports only the first one that does not: every later one follows from it, and
+    would crowd the rest of the test's findings out of its line."""
+
+    def __init__(self, want, probs):
+        self.want, self.probs, self.lost = want, probs, False
+
+    def check(self, when, where, got):
+        have = {f: _dict(got).get(f) or None for f in ("gender", "mascot")}
+        if have != self.want and not self.lost:
+            self.lost = True
+            self.probs.append("%s, %s has gender %s and mascot %s, not %s and %s, which only hikmat_current held"
+                              % (when, where, json.dumps(have["gender"]), json.dumps(have["mascot"]),
+                                 self.want["gender"], self.want["mascot"]))
+
+
+def _erased_after_landing(env, fx):
+    """(stored guest profile, problems) from a second phone on the build as it is, with no sabotage:
+    fx with room, so the fold lands on the first launch, then Start fresh and two more launches.
+    An erase made while the fold waited must leave this same profile."""
+    ph = env.phone()
+    probs = []
+    try:
+        ph.seed(Fixture(fx.name + ", with room", fx.doc))
+        ph.launch("new")
+        if ph.page.evaluate("() => localStorage.getItem('hikmat_current') !== null"):
+            probs.append("the fold did not land although there was room")
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+        for _ in range(2):
+            ph.launch("new")
+        raw = ph.page.evaluate(STORAGE_JS)["keys"].get("hikmat_state_guest")
+        if ph.errors:
+            probs.append(_clip(ph.errors, 3))
+    finally:
+        ph.close()
+    return _parsed(raw), probs
 
 
 def _attempt_queue(student, size):
@@ -1740,12 +1799,18 @@ def erase_while_fold_pending(env, sabotage=None, prelude=None):
     """S5. The S3 phone, with S-0042's fold still waiting for room, and she taps Start fresh. That
     erases every star on this phone, the waiting fold's too, just as it would have if the fold had
     landed first. Once there is room, no launch may land the fold and bring S-0042's stars back
-    into the profile she has just erased. The account's own key stays as it was."""
+    into the profile she has just erased. What the fold carries besides stars stays, as it does
+    when the fold lands first: S-0042's guide and Hindi form, which only hikmat_current held, so
+    the erase that ends the fold must store them before hikmat_current goes. The profile it leaves
+    must be the one a second phone leaves, where the fold landed and she then erased. The account's
+    own key stays as it was."""
     tag, code = "[%s] erase_while_fold_pending" % env.mode, "S5"
     fx = load_fixture(SAVES / "retired-account.json", "retired-account on a full phone, then Start fresh")
     fx.fill = True
+    want = _carried(fx)
 
     def steps(ph, probs):
+        carry = _Carry(want, probs)
         ph.seed(fx)
         ph.launch("new")
         if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
@@ -1761,6 +1826,9 @@ def erase_while_fold_pending(env, sabotage=None, prelude=None):
             probs.append("Start fresh did not reach storage: hikmat_state_guest still holds stars or gems")
         if "hikmat_current" in erased:
             probs.append("hikmat_current is still there after Start fresh")
+        if guest is not None:
+            carry.check("after Start fresh", "hikmat_state_guest", guest)
+        carry.check("after Start fresh", "the state in memory", ph.page.evaluate(SHOWN_JS))
         ph.page.evaluate(DROP_FILLER_JS)
         left = {k: v for k, v in erased.items() if not k.startswith("zz_filler_")}
         for which in ("the first launch with room", "the launch after it"):
@@ -1770,6 +1838,95 @@ def erase_while_fold_pending(env, sabotage=None, prelude=None):
                 probs.append("%s shows %s stars and %s gems: the waiting fold landed in the profile she had erased"
                              % (which, shown["total"], shown["coins"]))
                 break
+            carry.check("on " + which, "the state in memory", shown)
+        then = ph.page.evaluate(STORAGE_JS)["keys"]
+        if then.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
+            probs.append("%s was changed or removed" % ACCOUNT_KEY)
+        probs.extend(_left_alone(left, then, may_go=CACHE_KEYS + ("hikmat_current",)))
+        ref, why = _erased_after_landing(env, fx)
+        probs.extend("on the phone where the fold landed first, " + w for w in why)
+        got = _parsed(then.get("hikmat_state_guest"))
+        if ref is None:
+            probs.append("the phone where the fold landed first stored no hikmat_state_guest to compare with")
+        elif got != ref:
+            probs.append("the erased profile differs from the one a fold that landed before the erase leaves: "
+                         + _clip(diff(ref, got), 4))
+
+    probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+             "Start fresh while S-0042's fold waited for room ended the fold too: two launches with room show 0 stars "
+             "and 0 gems, the erased profile keeps gender %s and mascot %s and is the one a fold that landed first "
+             "leaves, and %s is untouched" % (want["gender"], want["mascot"], ACCOUNT_KEY)))]
+
+
+def erase_refused_while_fold_pending(env, sabotage=None, prelude=None):
+    """S7. The S5 phone without a guest profile, as on a phone that was signed in from its first
+    launch. Start fresh is then the first write of hikmat_state_guest, and a phone full to the last
+    character refuses it, so nothing of the erase is stored. hikmat_current must stay as it was: it
+    is the only copy of S-0042's guide and Hindi form, and the fold still to land. Room then
+    appears in the same launch, and her next save lands. That save stores the erased profile with
+    the guide and Hindi form, and the fold must end with it: left waiting, it would land on the next
+    launch inside the profile she erased."""
+    tag, code = "[%s] erase_refused_while_fold_pending" % env.mode, "S7"
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account without a guest profile on a full phone")
+    del fx.local["hikmat_state_guest"], fx.seed_states["hikmat_state_guest"]
+    fx.fill = True
+    want = _carried(fx)
+
+    def steps(ph, probs):
+        carry = _Carry(want, probs)
+        ph.seed(fx)
+        seeded = _seeded(ph)["keys"]
+        ph.launch("new")
+        first = ph.page.evaluate(STORAGE_JS)["keys"]
+        if "hikmat_current" not in first:
+            probs.append("hikmat_current was not kept on the full phone, so no fold was waiting and the erase proved nothing")
+            return
+        if "hikmat_state_guest" in first:
+            probs.append("a save landed before Start fresh, so the phone was not full and the refused erase was never tried")
+            return
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        erased = ph.page.evaluate(STORAGE_JS)["keys"]
+        if "hikmat_state_guest" in erased:
+            probs.append("localStorage kept the erase, so this phone never refused it and the check proved nothing")
+            return
+        if erased.get("hikmat_current") != fx.local["hikmat_current"]:
+            probs.append("hikmat_current %s although localStorage refused the erase: it was the only copy of gender %s "
+                         "and mascot %s, and the fold still to land"
+                         % ("went" if "hikmat_current" not in erased else "changed", want["gender"], want["mascot"]))
+        if erased.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
+            probs.append("%s was changed or removed by the refused erase" % ACCOUNT_KEY)
+        probs.extend(_left_alone(seeded, erased, may_go=CACHE_KEYS + ("hikmat_current",)))
+        # Room appears in the same launch, and her next save, the one her next game makes, lands.
+        ph.page.evaluate(DROP_FILLER_JS)
+        r = ph.page.evaluate(SAVE_JS)
+        if not r["ok"]:
+            probs.append("her next save threw %s: %s" % (r["name"], _line(r["text"], 120)))
+        elif r["value"] is not True:
+            probs.append("her next save, with room, returned %s, not true" % json.dumps(r["value"]))
+        stored = ph.page.evaluate(STORAGE_JS)["keys"]
+        if "hikmat_current" in stored:
+            probs.append("hikmat_current is still there after her next save stored the erased profile, so the fold "
+                         "still waits to land in it")
+        guest = _parsed(stored.get("hikmat_state_guest"))
+        if guest is None:
+            probs.append("her next save stored no hikmat_state_guest")
+        else:
+            if _starred(guest) or _num(guest.get("coins")):
+                probs.append("the profile her next save stored holds stars or gems, so it is not the erased one")
+            carry.check("after her next save", "hikmat_state_guest", guest)
+        left = {k: v for k, v in stored.items() if not k.startswith("zz_filler_")}
+        for which in ("the next launch", "the launch after it"):
+            ph.launch("new")
+            shown = ph.page.evaluate(SHOWN_JS)
+            if shown["total"] or shown["coins"]:
+                probs.append("%s shows %s stars and %s gems: the waiting fold landed in the profile she had erased"
+                             % (which, shown["total"], shown["coins"]))
+                break
+            carry.check("on " + which, "the state in memory", shown)
         then = ph.page.evaluate(STORAGE_JS)["keys"]
         if then.get(ACCOUNT_KEY) != fx.local[ACCOUNT_KEY]:
             probs.append("%s was changed or removed" % ACCOUNT_KEY)
@@ -1777,8 +1934,9 @@ def erase_while_fold_pending(env, sabotage=None, prelude=None):
 
     probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
     return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
-             "Start fresh while S-0042's fold waited for room ended the fold too: two launches with room show 0 stars "
-             "and 0 gems, and %s is untouched" % ACCOUNT_KEY))]
+             "the full phone refused the erase and kept hikmat_current as it was; once her next save landed, it "
+             "stored the erased profile with gender %s and mascot %s, the fold ended with it, and two launches "
+             "show 0 stars and 0 gems" % (want["gender"], want["mascot"])))]
 
 
 def retire_frees_queue_room(env, sabotage=None, prelude=None):
@@ -1898,6 +2056,12 @@ def t_retire_frees_queue_room(env, report):
         report.check(ok, msg)
 
 
+@test("erase_refused_while_fold_pending")
+def t_erase_refused_while_fold_pending(env, report):
+    for _code, ok, msg in erase_refused_while_fold_pending(env):
+        report.check(ok, msg)
+
+
 def _played(fx):
     """A deterministic played star in the fixture's guest state that the curriculum still has."""
     prog = _dict(_dict(fx.seed_states.get("hikmat_state_guest")).get("progress"))
@@ -1964,6 +2128,19 @@ LATE_QUEUE_DROP = ("/* e2e self-test: the queues go after the fold */(function()
 DROP_SETTINGS_TOO = _sab("making room also drops the settings cache",
                          "var real=dropContentCaches;dropContentCaches=function(){real();"
                          "localStorage.removeItem('hikmat_settings_cache');};")
+# Start fresh ends a waiting fold without carrying the guide and Hindi form it holds, as 26e13b3
+# did: hikmat_current goes, and with it the only copy of both. retireAccounts() keeps the real
+# carry, because it runs before this script does.
+NO_CARRY = _sab("Start fresh ends a waiting fold without what it carries", "carryMascotAndGender=function(into){return into;};")
+# Start fresh removes hikmat_current whether or not its save lands, as 26e13b3 did. A refused
+# erase then loses the only copy of the guide and Hindi form, and the fold with it.
+FOLD_GOES_FIRST = _sab("Start fresh removes hikmat_current whether or not its save lands",
+                       "var real=eraseWaitingFold;eraseWaitingFold=function(st){real(st);endFoldWhenKept=false;endAccountFold();};")
+# The fold ends only if Start fresh's own save lands. When that one is refused and a later save
+# lands, the erased profile is stored but hikmat_current stays, and the next launch with room
+# folds the account's stars into the profile she erased.
+FOLD_ENDS_WITH_ERASE_ONLY = _sab("only Start fresh's own save can end a waiting fold",
+                                 "var real=save;save=function(){var k=real.apply(this,arguments);endFoldWhenKept=false;return k;};")
 
 
 def _private_output_problems():
@@ -2002,7 +2179,7 @@ def _private_output_problems():
 @test("self-test", once=True)
 def t_self_test(env, report):
     """The checks must be able to fail, each on its own. Broken builds go through the same update
-    as the fixtures, or onto the same full phone as S1-S6, and each must fail exactly the check it
+    as the fixtures, or onto the same full phone as S1-S7, and each must fail exactly the check it
     breaks, naming what it broke. A build that is slow but correct must still pass, and a private
     save's output must carry nothing of hers."""
     tag = "[%s] self-test" % env.mode
@@ -2076,8 +2253,17 @@ def t_self_test(env, report):
            ["S4"], [("S4", "backendLive")])
     judged("Start fresh that leaves a waiting account fold in place", erase_while_fold_pending(env, sabotage=KEEP_WAITING_FOLD),
            ["S5"], [("S5", "waiting fold landed")])
+    carried = _carried(load_fixture(SAVES / "retired-account.json", "retired-account"))
+    judged("Start fresh that ends a waiting fold without its guide and Hindi form", erase_while_fold_pending(env, sabotage=NO_CARRY),
+           ["S5"], [("S5", "not %s and %s, which only hikmat_current held" % (carried["gender"], carried["mascot"]))])
     judged("an account fold tried before the unsendable queues are gone", retire_frees_queue_room(env, prelude=LATE_QUEUE_DROP),
            ["S6"], [("S6", "hikmat_current is still there")])
+    judged("Start fresh that removes hikmat_current whether or not its save lands",
+           erase_refused_while_fold_pending(env, sabotage=FOLD_GOES_FIRST),
+           ["S7"], [("S7", "hikmat_current went although localStorage refused the erase")])
+    judged("a waiting fold that only Start fresh's own save can end",
+           erase_refused_while_fold_pending(env, sabotage=FOLD_ENDS_WITH_ERASE_ONLY),
+           ["S7"], [("S7", "hikmat_current is still there after her next save")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------
