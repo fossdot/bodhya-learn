@@ -381,6 +381,20 @@ Tests that replay real saves through the update must prove that no star total dr
   Check that nothing wraps badly in Hindi and that every button is at least 48 px tall.
 - [ ] **Step 5: Commit:** "Start fresh asks on its own sheet, and an erase can be undone for 7 days".
 
+**As built (5 Nov):**
+- **Layout against Figma 23:244.** Kept from Figma: title, body, undo note, the outlined quiet-red Erase, Keep it as the main button, both 56 px tall. Kept from the plan: the 32 px gap between Erase and Keep it (Figma has 14 px; 32 is the reviewed, safer distance from the button under her thumb), and the plan's body copy (Figma's names a learner, and with accounts off there are no names). The buttons keep the app's pill shape.
+- **Keep it, and Bring it in on the Task 5 sheet, use navy text on the saffron gradient** (Figma draws Keep it that way): 6.1:1 to 8.3:1, where white is 2.0:1 to 2.7:1 and fails AA. Every other `.btn.primary` in the app still has white text: that is older than v8 and outside this step's "no visual change" rule (noted under Not in this step).
+- After an erase that is kept, My progress opens again, with "Progress erased…" and the undo row in it, so she sees what happened and where to bring it back from. Before, the sheet closed and only the screen reader was told.
+- **The undo copy and a waiting account fold.** A waiting fold's stars are never in her profile; they stay in the account's own key, which nothing deletes. The erase ends the fold, so the undo copy records which account (`fold: {id, gender, mascot}`, never the name), and the restore folds that account's stars back once, as the fold would have. **U9 `undo_brings_back_waiting_fold`** (native) tests this, and `_fold_landed` checks that its attempts are counted once through two more launches.
+- **On the web, a phone with no room for the undo copy refuses Start fresh** ("Could not erase. Try again."), as the plan's rule says: there is no native store to hold it. S5 now checks exactly that in web mode, and its full case runs in native mode, where its two older sabotages are now judged.
+- The fake Preferences can now lose the next write to one key (`drop_next_write = "<key>"`). N6 and N6b (a) lose the erase's own write, not the undo copy written just before it.
+- **U6** loses every native write of the restore (`refuse_writes`). One lost write is not enough: `mirrorNow` writes again and reads back, so a single drop heals and the native copy is never stale.
+- **U5** expects "Last day" six days on, as the copy table says, not "1 day left" as the test line said. Days left are rounded up: 7 just after the erase, "Last day" in its final 24 hours.
+- U1 and U2 run in web mode only. They measure layout and tap timing, which the native fake does not touch. U3, U5, U7 and U8 run in both modes; U4, U6 and U9 are native.
+- Self-test sabotages: no 600 ms guard (U2), Erase and Keep it swapped (U1), a restore that replaces her state (U7), a restore that keeps the undo copy's eraseGen (U6), an undo copy never removed (U5, as a prelude: on the web the launch's sweep runs before any script appended after the game's), an undo copy kept only in localStorage (U4), and one that forgets the ended fold (U9).
+- Screenshots in `docs/pr-screens/step-0/`, 360x640, English and Hindi, light and dark: My progress (top and end), the confirm sheet, and My progress with the undo row. Every button is at least 48 px; nothing overflows sideways; Erase is 6.5:1 (light) and 8.5:1 (dark), the undo note 9.4:1 and 8:1.
+- Hindi checked for every new line of Tasks 4 to 6: imperatives and passives only, none addressing her as masculine.
+
 ### Task 7: Android wiring, v8 build, checks, closed testing, PR
 
 **Files:**
@@ -414,6 +428,8 @@ Tests that replay real saves through the update must prove that no star total dr
 - [ ] **Open the PRs.** Push and open the PRs: `fix/topbar-long-back-label` → `nightly`, then `safety/step-0`, with the screenshots, test output and android-app diffs. Web: no deploy.
 
 ## Not in this step
+
+- **White text on the saffron main button** (noted 5 Nov). `.btn.primary` puts white on a gradient from #ffa24d to #f47b20, 2.0:1 to 2.7:1, below AA. The v8 sheets use navy (`.btn.primary.ink`). Changing every main button is a visual change across the app, for the redesign.
 
 - **A WebView too old for the game** (noted 5 Nov, for after v8). The game needs Chrome 60 (object spread, in v7 too); an Android 8 phone whose WebView never updated has 58 and shows a blank screen. Instead: a small script, run before the game's, that shows a plain message in English and Hindi, "Please update Android System WebView", with what to tap. Check Play Console (Android vitals, device catalog) for how many installs have a WebView older than 60.
 

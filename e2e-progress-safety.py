@@ -389,7 +389,9 @@ class Native:
     forgets encoding:"utf8" fails here as it does on a phone.
 
     Switches a test can flip between calls:
-      drop_next_write    the next Preferences.set resolves but stores nothing: a lost native write
+      drop_next_write    the next Preferences.set resolves but stores nothing: a lost native write.
+                         A key name instead of True loses the next set of that key only, so a
+                         test can lose the erase's own write and not the undo copy written first
       get_delay_ms       every Preferences.get waits this long before it reads: a slow bridge at boot
       refuse_writes      while true, every Preferences.set is rejected: a phone whose disk is full
       cancel_next_share  the next Share.share is rejected with "Share canceled", as SharePlugin
@@ -460,7 +462,7 @@ class Native:
             if self.refuse_writes:
                 self._note("set", key=key, size=len(v or ""), refused=True)
                 return {"__error": "Unable to write to storage"}
-            if self.drop_next_write:
+            if self.drop_next_write is True or (self.drop_next_write and self.drop_next_write == key):
                 self.drop_next_write = False
                 self._note("set", key=key, size=len(v or ""), dropped=True)
                 return {}
@@ -1675,17 +1677,37 @@ def _worth(fx):
     return "%d stars in %d games" % (sum(stars.values()), len(stars))
 
 
-def start_fresh(page):
-    """Start fresh the way she does it: ☰, My progress, then Start fresh, which asks on the same
-    button and erases on the second tap. Returns what went wrong, or ""."""
-    try:
+# Which message the My progress sheet shows ("" for none): erased, erasefail, restored, undofail...
+SHEET_MSG_JS = r"""() => { const w = document.getElementById("progWarn");
+  return w && w.style.display !== "none" ? (w.dataset.msg || "") : ""; }"""
+
+
+def _open_erase(page):
+    """☰, My progress, Start fresh: the confirm sheet is open."""
+    if not page.query_selector("#progWrap"):
         page.click("#menuBtn", timeout=3000)
         page.click("#mProg", timeout=3000)
-        page.click("#progWipe", timeout=3000)
-        page.click("#progWipe", timeout=3000)
-        page.wait_for_selector("#progWrap", state="detached", timeout=3000)
+    page.click("#progWipe", timeout=3000)
+    page.wait_for_selector("#eraseWrap", timeout=3000)
+
+
+def start_fresh(page, expect="erased"):
+    """Start fresh the way she does it: ☰, My progress, Start fresh, then Erase on the confirm sheet
+    once its 600 ms guard has passed. Returns what went wrong, or "" when the sheet ends on the
+    message `expect` ("erased", or "erasefail" when no copy can take the erase)."""
+    try:
+        _open_erase(page)
+        page.wait_for_timeout(650)
+        page.click("#eraseYes", timeout=3000)
+        page.wait_for_selector("#eraseWrap", state="detached", timeout=15000)
+        page.wait_for_function("(m) => (%s)() === m" % SHEET_MSG_JS, arg=expect, timeout=15000)
     except PWTimeout as e:
-        return "Start fresh could not be tapped through (%s)" % _line(str(e), 120)
+        got = ""
+        try:
+            got = page.evaluate(SHEET_MSG_JS)
+        except Exception:
+            pass
+        return "Start fresh did not end with %r: the sheet says %r (%s)" % (expect, got, _line(str(e), 100))
     return ""
 
 
@@ -1827,6 +1849,15 @@ def erase_while_fold_pending(env, sabotage=None, prelude=None):
         if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
             probs.append("hikmat_current was not kept on the full phone, so no fold was waiting and the erase proved nothing")
             return
+        if ph.NATIVE is None:
+            # The web build has no native store, and this phone has no room for the undo copy, so
+            # Start fresh is refused (Task 6): she is told, and nothing on the phone changes.
+            before = ph.page.evaluate(STORAGE_JS)["keys"]
+            why = start_fresh(ph.page, expect="erasefail")
+            if why:
+                probs.append("with no room for the undo copy the erase must be refused. " + why)
+            probs.extend(_left_alone(before, ph.page.evaluate(STORAGE_JS)["keys"], may_go=CACHE_KEYS))
+            return
         why = start_fresh(ph.page)
         if why:
             probs.append(why)
@@ -1864,6 +1895,9 @@ def erase_while_fold_pending(env, sabotage=None, prelude=None):
                          + _clip(diff(ref, got), 4))
 
     probs = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    if env.mode == "web":
+        return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
+                 "on the web, with no room for the undo copy, Start fresh was refused, she was told, and nothing changed"))]
     return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else
              "Start fresh while S-0042's fold waited for room ended the fold too: two launches with room show 0 stars "
              "and 0 gems, the erased profile keeps gender %s and mascot %s and is the one a fold that landed first "
@@ -2548,7 +2582,7 @@ def erase_stays_erased(env, sabotage=None, prelude=None):
         ph.seed(fx)
         ph.launch("new")
         _agree(ph, probs, "before Start fresh,")
-        ph.NATIVE.drop_next_write = True
+        ph.NATIVE.drop_next_write = GUEST      # the erase's own write, not the undo copy before it
         why = start_fresh(ph.page)
         if why:
             probs.append(why)
@@ -2586,7 +2620,7 @@ def erase_with_waiting_fold_and_stale_mirror(env, sabotage=None, prelude=None):
     is at least 1 in localStorage and in the native copy."""
     tag = "[%s] erase_with_waiting_fold_and_stale_mirror" % env.mode
     probs = []
-    for case, fx, drop in (("(a)", load_fixture(SAVES / "retired-account.json", "retired-account on a full phone"), True),
+    for case, fx, drop in (("(a)", load_fixture(SAVES / "retired-account.json", "retired-account on a full phone"), GUEST),
                            ("(b)", _s7_phone(), False)):
         fx.fill = True
         want = _carried(fx)
@@ -2644,19 +2678,9 @@ def erase_refused_everywhere(env, sabotage=None, prelude=None):
         if ph.NATIVE is not None:
             _settled(ph)
             ph.NATIVE.refuse_writes = True
-        try:
-            ph.page.click("#menuBtn", timeout=3000)
-            ph.page.click("#mProg", timeout=3000)
-            ph.page.click("#progWipe", timeout=3000)
-            ph.page.click("#progWipe", timeout=3000)
-            ph.page.wait_for_function("() => { const w = document.querySelector('#progWarn span');"
-                                      " return !document.getElementById('progWrap') || (w && /Could not erase/.test(w.textContent)); }",
-                                      timeout=8000)
-        except PWTimeout as e:
-            probs.append("Start fresh could not be tapped through (%s)" % _line(str(e), 120))
-            return
-        if not ph.page.evaluate("() => !!document.getElementById('progWrap')"):
-            probs.append("the sheet closed as if the erase had worked, although no copy took it")
+        why = start_fresh(ph.page, expect="erasefail")
+        if why:
+            probs.append("no copy could take the erase, so she must be told it failed. " + why)
             return
         if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
             probs.append("hikmat_current went although nothing of the erase was stored")
@@ -3329,6 +3353,428 @@ for _name, _fn in (("save_bring_round_trip", save_bring_round_trip),
     test(_name)(_t)
 
 
+# ---------------------------------------------------------------- Task 6: the confirm sheet and undo -
+# Rule 11: Start fresh asks on its own sheet, where Keep it, not Erase, lies under the thumb that
+# tapped Start fresh, and Erase ignores taps for 600 ms. An erase keeps an undo copy for 7 days, in
+# localStorage and natively (D7); restoring it brings every star back, keeps what she earned since,
+# and leaves eraseGen one above both, so no copy from before it can win.
+
+UNDO = "hikmat_undo_guest"
+DAY_MS = 86400000
+VIEWPORTS = ({"width": 360, "height": 640}, {"width": 393, "height": 852}, {"width": 1280, "height": 800})
+RECT_JS = r"""(id) => { const r = document.getElementById(id).getBoundingClientRect();
+  return { x: r.x, y: r.y, w: r.width, h: r.height }; }"""
+UNDO_ROW_JS = r"""() => { const b = document.getElementById("progUndo");
+  return b ? { days: Number(b.dataset.days), text: b.innerText } : null; }"""
+CLOCK_JS = "/* e2e: the clock is %d days on */(function(){var n=Date.now.bind(Date);Date.now=function(){return n()+%d;};})();"
+
+
+def _undo_row(ph, wait_s=3.0):
+    """The "Bring back what I erased" row in My progress, or None. It is drawn once readUndo answers."""
+    _open_progress(ph.page)
+    try:
+        ph.page.wait_for_selector("#progUndo", timeout=int(wait_s * 1000))
+    except PWTimeout:
+        return None
+    return ph.page.evaluate(UNDO_ROW_JS)
+
+
+def _restore(ph):
+    """Bring back what I erased, as she does it. Returns the message the sheet then shows."""
+    _open_progress(ph.page)
+    ph.page.click("#progUndo", timeout=5000)
+    ph.page.wait_for_function("() => ['restored', 'undofail'].includes((%s)())" % SHEET_MSG_JS, timeout=15000)
+    return ph.page.evaluate(SHEET_MSG_JS)
+
+
+def _undo_copies(ph):
+    """{where: parsed undo copy} for each store that holds one."""
+    out = {}
+    if _local(ph, UNDO) is not None:
+        out["localStorage"] = _parsed(_local(ph, UNDO))
+    if ph.NATIVE is not None and UNDO in ph.NATIVE.prefs:
+        out["native"] = _parsed(ph.NATIVE.prefs[UNDO])
+    return out
+
+
+def _outside(a, b, grow):
+    """True when rect a does not touch rect b grown by `grow` px on every side."""
+    return (a["x"] + a["w"] <= b["x"] - grow or a["x"] >= b["x"] + b["w"] + grow
+            or a["y"] + a["h"] <= b["y"] - grow or a["y"] >= b["y"] + b["h"] + grow)
+
+
+def erase_confirm_layout(env, sabotage=None, prelude=None):
+    """U1. At 360x640, 393x852 and 1280x800, in English and Hindi: Erase is nowhere near where
+    Start fresh was (its rect grown by 16 px), Keep it covers Start fresh's centre, Keep it leaves
+    My progress open, and a real double tap on Start fresh (120 ms apart) erases nothing."""
+    tag = "[%s] erase_confirm_layout" % env.mode
+    seed = _mid().seed_states[GUEST]
+    probs = []
+    for vp in VIEWPORTS:
+        for lang in ("en", "hi"):
+            where = "%dx%d %s" % (vp["width"], vp["height"], lang)
+            fx = Fixture("v7-midway in " + lang, _envelope(dict(seed, lang=lang)))
+
+            def steps(ph, p, fx=fx, where=where, vp=vp):
+                ph.seed(fx)
+                ph.launch("new")
+                ph.page.set_viewport_size(vp)
+                _open_progress(ph.page)
+                ph.page.evaluate("() => document.getElementById('progWipe').scrollIntoView({ block: 'end' })")
+                ph.page.wait_for_timeout(400)
+                w = ph.page.evaluate(RECT_JS, "progWipe")
+                before = _local(ph)
+                ph.page.click("#progWipe", timeout=3000)
+                ph.page.wait_for_selector("#eraseWrap", timeout=3000)
+                ph.page.wait_for_timeout(400)
+                y, k = ph.page.evaluate(RECT_JS, "eraseYes"), ph.page.evaluate(RECT_JS, "eraseKeep")
+                cx, cy = w["x"] + w["w"] / 2, w["y"] + w["h"] / 2
+                if not _outside(y, w, 16):
+                    p.append("%s: Erase lies within 16 px of where Start fresh was" % where)
+                if not (k["x"] <= cx <= k["x"] + k["w"] and k["y"] <= cy <= k["y"] + k["h"]):
+                    p.append("%s: Keep it (y %d-%d) does not cover Start fresh's centre (%d, %d)"
+                             % (where, k["y"], k["y"] + k["h"], cx, cy))
+                ph.page.click("#eraseKeep", timeout=3000)
+                ph.page.wait_for_selector("#eraseWrap", state="detached", timeout=3000)
+                if not ph.page.query_selector("#progWrap"):
+                    p.append("%s: Keep it closed My progress as well" % where)
+                ph.page.mouse.click(cx, cy)
+                ph.page.wait_for_timeout(120)
+                ph.page.mouse.click(cx, cy)
+                ph.page.wait_for_timeout(1500)
+                if _local(ph) != before:
+                    p.append("%s: a double tap on Start fresh changed her progress" % where)
+
+            probs += _full_phone_run(_file_phone(env, sabotage, prelude), steps)
+    return _rel("U1", tag, probs, "at 360x640, 393x852 and 1280x800 in English and Hindi, Keep it lay under Start "
+                                  "fresh's centre, Erase stayed 16 px clear, and a double tap erased nothing")
+
+
+def erase_guard(env, sabotage=None, prelude=None):
+    """U2. A tap on Erase as the sheet opens does nothing; one after 600 ms erases."""
+    tag = "[%s] erase_guard" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        before = _local(ph)
+        _open_erase(ph.page)
+        ph.page.evaluate("() => document.getElementById('eraseYes').click()")
+        ph.page.wait_for_timeout(300)
+        if _local(ph) != before or not ph.page.query_selector("#eraseWrap"):
+            probs.append("a tap on Erase as the sheet opened was taken")
+            return
+        ph.page.wait_for_timeout(500)
+        ph.page.click("#eraseYes", timeout=3000)
+        try:
+            ph.page.wait_for_function("(m) => (%s)() === m" % SHEET_MSG_JS, arg="erased", timeout=15000)
+        except PWTimeout:
+            probs.append("a tap on Erase after 600 ms did not erase (%r)" % ph.page.evaluate(SHEET_MSG_JS))
+            return
+        if ph.page.evaluate(SHOWN_JS)["total"]:
+            probs.append("after the erase she still has stars")
+
+    return _rel("U2", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "a tap on Erase as the sheet opened did nothing, and one after 600 ms erased")
+
+
+def undo_round_trip(env, sabotage=None, prelude=None):
+    """U3. Erase: the undo copy is in localStorage (and natively in the app), her state as it was,
+    until 7 days after erasedAt. A relaunch shows the undo row with 7 days left. Restoring gives
+    back the state before the erase, with eraseGen 2 and no undo copy left, and so does the next
+    launch, which has no undo row."""
+    tag = "[%s] undo_round_trip" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre, pre_snap = _parsed(_local(ph)), ph.snap()
+        t0 = time.time() * 1000
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        copies = _undo_copies(ph)
+        for where in ("localStorage",) + (("native",) if ph.NATIVE is not None else ()):
+            u = copies.get(where)
+            if u is None:
+                probs.append("there is no undo copy in %s" % where)
+                continue
+            if (u.get("kind"), u.get("v")) != ("bodhya-erase-undo", 1):
+                probs.append("the undo copy in %s is %r, not bodhya-erase-undo v1" % (where, (u.get("kind"), u.get("v"))))
+            at, until = _num(u.get("erasedAt")) or 0, _num(u.get("until")) or 0
+            if until - at != 7 * DAY_MS or abs(at - t0) > 60000:
+                probs.append("the undo copy in %s runs from %s to %s, not 7 days from the erase" % (where, at, until))
+            if u.get("state") != pre:
+                probs.append("the undo copy in %s is not her state before the erase: %s"
+                             % (where, _clip(diff(pre, u.get("state"), values=False), 3)))
+        if probs:
+            return
+        ph.launch("new")
+        row = _undo_row(ph)
+        if not row or row["days"] != 7:
+            probs.append("after a relaunch the undo row is %r, not one with 7 days left" % (row,))
+            return
+        msg = _restore(ph)
+        if msg != "restored":
+            probs.append("Bring back what I erased ended with %r" % msg)
+            return
+        for which in ("right after", "after a relaunch"):
+            if which != "right after":
+                ph.launch("new")
+            now = _parsed(_local(ph))
+            low = lowered(pre, now, GUEST) + fields_lost(pre, now, GUEST)
+            ch = changed_numbers(pre, now or {})
+            if low or ch:
+                probs.append("%s: %s" % (which, _clip(low + ["%s %s -> %s" % (q, a, b) for q, (a, b) in sorted(ch.items())], 3)))
+            if _dict(now).get("eraseGen") != 2:
+                probs.append("%s: eraseGen is %s, not 2" % (which, _dict(now).get("eraseGen")))
+            if _undo_copies(ph):
+                probs.append("%s: an undo copy is still there (%s)" % (which, ", ".join(_undo_copies(ph))))
+            snap = ph.snap()
+            if snap["level"] != pre_snap["level"] or sorted(snap["playedOpen"]) != sorted(pre_snap["playedOpen"]):
+                probs.append("%s: level %s and %d open played lessons, not %s and %d" % (
+                    which, snap["level"], len(snap["playedOpen"]), pre_snap["level"], len(pre_snap["playedOpen"])))
+        if _undo_row(ph, wait_s=1.5) is not None:
+            probs.append("after the restore and a relaunch the undo row is still there")
+
+    return _rel("U3", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "the erase kept a 7-day undo copy of her state, the row showed 7 days left after a relaunch, and the "
+                "restore gave back every star, level and open lesson with eraseGen 2 and no copy left")
+
+
+def undo_survives_webview_wipe(env, sabotage=None, prelude=None):
+    """U4. Erase, then the WebView's data is lost. The undo row is read from the native copy, and
+    the restore brings every star back."""
+    tag = "[%s] undo_survives_webview_wipe" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        _settled(ph)
+        ph.page.evaluate("() => localStorage.clear()")
+        ph.launch("new")
+        if _undo_row(ph) is None:
+            probs.append("after the WebView was wiped there is no undo row: the native undo copy was not read")
+            return
+        msg = _restore(ph)
+        probs.extend(lowered(pre, _parsed(_local(ph)), GUEST) if msg == "restored"
+                     else ["the restore ended with %r" % msg])
+
+    return _rel("U4", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "with the WebView wiped after the erase, the undo row came from the native copy and the restore "
+                "brought every star back")
+
+
+def undo_expires(env, sabotage=None, prelude=None):
+    """U5. Eight days after the erase the undo copies are removed from both stores at launch, and
+    there is no undo row. Six days after it, the row says it is the last day."""
+    tag = "[%s] undo_expires" % env.mode
+    fx = _mid()
+    probs = []
+
+    def after(days):
+        def steps(ph, p):
+            ph.seed(fx)
+            ph.launch("new")
+            why = start_fresh(ph.page)
+            if why:
+                p.append(why)
+                return
+            if ph.NATIVE is not None:
+                _settled(ph)
+            ph.ctx.add_init_script(CLOCK_JS % (days, days * DAY_MS))
+            ph.launch("new")
+            if days == 8:
+                end = time.monotonic() + 3
+                while _undo_copies(ph) and time.monotonic() < end:
+                    ph.page.wait_for_timeout(100)
+                if _undo_copies(ph):
+                    p.append("8 days on, the undo copy is still in %s" % ", ".join(_undo_copies(ph)))
+                if _undo_row(ph, wait_s=1.5) is not None:
+                    p.append("8 days on, the undo row is still offered")
+            else:
+                row = _undo_row(ph)
+                if not row or row["days"] != 1:
+                    p.append("%d days on, the undo row is %r, not the last day" % (days, row))
+        return steps
+
+    for d in (8, 6):
+        probs += _full_phone_run(_file_phone(env, sabotage, prelude), after(d))
+    return _rel("U5", tag, probs, "8 days on, both undo copies were gone at launch with no row; 6 days on, the row "
+                                  "said it was the last day")
+
+
+def restore_beats_stale_native(env, sabotage=None, prelude=None):
+    """U6. Every native write of the restore is lost (mirrorNow writes again after one lost write,
+    so a single drop heals), and the native copy still holds the erased state. The restore has the
+    higher eraseGen, so two launches keep every restored star."""
+    tag = "[%s] restore_beats_stale_native" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        _settled(ph)
+        ph.NATIVE.refuse_writes = True
+        if _restore(ph) != "restored":
+            probs.append("the restore did not finish")
+            return
+        ph.NATIVE.refuse_writes = False
+        if _dict(_parsed(ph.NATIVE.prefs.get(GUEST))).get("eraseGen") != 1:
+            probs.append("the native copy is not the erased one, so the check proved nothing")
+            return
+        for which in ("the next launch", "the launch after it"):
+            ph.launch("new")
+            low = lowered(pre, _parsed(_local(ph)), GUEST)
+            if low:
+                probs.append("%s, with the stale native copy from the erase: %s" % (which, _clip(low, 3)))
+                break
+
+    return _rel("U6", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "with every native write of the restore lost, two launches kept every restored star over the "
+                "erased native copy")
+
+
+def restore_keeps_new_play(env, sabotage=None, prelude=None):
+    """U7. Erase, earn a star in a new lesson, restore: the old stars and the new one are all there."""
+    tag = "[%s] restore_keeps_new_play" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        if _restore(ph) != "restored":
+            probs.append("the restore did not finish")
+            return
+        now = _parsed(_local(ph))
+        probs.extend(lowered(pre, now, GUEST))
+        if _learn_star(now, ck, lk) != 3:
+            probs.append("the star she earned after the erase, at %s/%s, is gone" % (ck, lk))
+
+    return _rel("U7", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "the restore brought back every old star and kept the new one earned after the erase")
+
+
+def rollback_after_erase_and_restore(env, sabotage=None, prelude=None):
+    """U8. R after the erase and after the restore: v7 opens each state with no error, shows 0 stars
+    after the erase, and after the restore the same total, level and open played lessons as before."""
+    tag = "[%s] rollback_after_erase_and_restore" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = ph.snap()
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        if ph.NATIVE is not None:
+            _settled(ph)
+        ph.launch("old")
+        old = ph.snap()
+        if old["total"]:
+            probs.append("v7 after the erase shows %s stars" % old["total"])
+        ph.launch("new")
+        if _restore(ph) != "restored":
+            probs.append("the restore did not finish")
+            return
+        if ph.NATIVE is not None:
+            _settled(ph)
+        ph.launch("old")
+        old = ph.snap()
+        if old["total"] != pre["total"] or old["level"] != pre["level"]:
+            probs.append("v7 after the restore shows %s stars at level %s, not %s at %s"
+                         % (old["total"], old["level"], pre["total"], pre["level"]))
+        shut = [x for x in pre["playedOpen"] if x not in old["playedOpen"]]
+        if shut:
+            probs.append("v7 after the restore shuts %d played lessons: %s" % (len(shut), _clip(map(str, shut), 3)))
+
+    return _rel("U8", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "v7 opened the erased state with 0 stars, and the restored one with the same total, level and open "
+                "lessons, with no error")
+
+
+def undo_brings_back_waiting_fold(env, sabotage=None, prelude=None):
+    """U9. The S5 phone: S-0042's fold waits for room, and Start fresh ends it. The undo copy names
+    that account (never by name), and the restore brings its stars back as the fold would have
+    landed them, once: two more launches neither lose them nor count its attempts again."""
+    tag = "[%s] undo_brings_back_waiting_fold" % env.mode
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account on a full phone, erase, then undo")
+    fx.fill = True
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
+            probs.append("no fold was waiting, so the check proved nothing")
+            return
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        copies = _undo_copies(ph)
+        raws = [r for r in (_local(ph, UNDO), ph.NATIVE.prefs.get(UNDO)) if r]
+        if any("Test Learner" in r for r in raws):
+            probs.append("the undo copy holds her name")
+        if not any(_dict(_dict(u).get("fold")).get("id") == "S-0042" for u in copies.values()):
+            probs.append("the undo copy does not say that the erase ended S-0042's fold")
+        ph.page.evaluate(DROP_FILLER_JS)
+        if _restore(ph) != "restored":
+            probs.append("the restore did not finish")
+            return
+        for which in ("right after", "after a launch", "after another launch"):
+            if which != "right after":
+                ph.launch("new")
+            keys = ph.page.evaluate(STORAGE_JS)["keys"]
+            bad = _fold_landed(fx, keys)
+            if "hikmat_current" in keys:
+                bad.append("hikmat_current is back, so the fold would land a second time")
+            if bad:
+                probs.append("%s: %s" % (which, _clip(bad, 3)))
+                break
+
+    return _rel("U9", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "the undo copy named S-0042's ended fold without her name, and the restore brought its stars back "
+                "once, through two more launches")
+
+
+for _name, _fn, _modes in (("erase_confirm_layout", erase_confirm_layout, ("web",)),
+                           ("erase_guard", erase_guard, ("web",)),
+                           ("undo_round_trip", undo_round_trip, ("web", "native")),
+                           ("undo_survives_webview_wipe", undo_survives_webview_wipe, ("native",)),
+                           ("undo_expires", undo_expires, ("web", "native")),
+                           ("restore_beats_stale_native", restore_beats_stale_native, ("native",)),
+                           ("restore_keeps_new_play", restore_keeps_new_play, ("web", "native")),
+                           ("rollback_after_erase_and_restore", rollback_after_erase_and_restore, ("web", "native")),
+                           ("undo_brings_back_waiting_fold", undo_brings_back_waiting_fold, ("native",))):
+    def _t(env, report, _fn=_fn):
+        for _code, ok, msg in _fn(env):
+            report.check(ok, msg)
+    test(_name, modes=_modes)(_t)
+
+
 @test("level_test_promotes")
 def t_level_test_promotes(env, report):
     for _code, ok, msg in level_test_promotes(env):
@@ -3530,6 +3976,31 @@ FILE_HOLDS_OTHERS = _sab("the file holds every profile on the phone", "var p0=pr
                          "if(k.indexOf('hikmat_state_')===0)o.others[k]=1;}return JSON.stringify(o);};")
 
 
+# Task 6. Erase takes a tap the moment its sheet opens.
+NO_ERASE_GUARD = _sab("Erase has no 600 ms guard", "ERASE_GUARD_MS=0;")
+# Erase sits last, under her thumb, and Keep it above it.
+ERASE_UNDER_THUMB = _sab("Erase and Keep it swap places", "var o6=openEraseSheet;openEraseSheet=function(){var r=o6.apply(this,arguments);"
+                       "var y=document.getElementById('eraseYes'),k=document.getElementById('eraseKeep');"
+                       "y.parentNode.insertBefore(k,y);return r;};")
+# The restore replaces her state with the undo copy, so what she earned since the erase goes.
+RESTORE_REPLACES = _sab("the restore replaces her state with the undo copy", "mergeRestore=function(cur,u){"
+                        "var r=JSON.parse(JSON.stringify(u.state));r.eraseGen=(cur.eraseGen||0)+1;return r;};")
+# The restore keeps the undo copy's own eraseGen, below the erased copy's.
+RESTORE_OLD_ERASEGEN = _sab("the restore keeps the undo copy's eraseGen", "var m6=mergeRestore;mergeRestore=function(c,u){"
+                            "var r=m6(c,u);r.eraseGen=u.state.eraseGen||0;return r;};")
+# An expired undo copy is never removed.
+# A prelude, not a script after the game's: on the web the launch's sweep runs as soon as the
+# game's own script ends, before anything appended after it.
+UNDO_NEVER_SWEPT = ("/* e2e self-test: an undo copy is never removed */(function(){var r=Storage.prototype.removeItem;"
+                    "Storage.prototype.removeItem=function(k){if(String(k).indexOf('hikmat_undo_')===0)return;"
+                    "return r.apply(this,arguments);};})();")
+# The undo copy is kept in localStorage only.
+UNDO_LOCAL_ONLY = _sab("the undo copy is never written natively", "_nativePut=function(){return Promise.resolve(false);};")
+# The undo copy forgets the account fold the erase ended.
+UNDO_FORGETS_FOLD = _sab("the undo copy forgets the fold the erase ended", "var u6=undoCopyOf;undoCopyOf=function(st){"
+                         "var u=u6(st);delete u.fold;return u;};")
+
+
 def _private_output_problems():
     """Judge a private save twice, once where every check passes and once where every check
     fails, and crash one run, then return every line that shows an old student id, one of her
@@ -3651,16 +4122,18 @@ def t_self_test(env, report):
            ["LT2"], [("LT2", "lessons are locked")])
     judged("a level-test pass that is never stored", level_test_promotes(env, sabotage=UNSAVED_PASS),
            ["LT1"], [("LT1", "after a relaunch she is at level 1")])
-    judged("Start fresh that leaves a waiting account fold in place", erase_while_fold_pending(env, sabotage=KEEP_WAITING_FOLD),
+    # S5 runs its full case in the app; on the web there is no room for the undo copy, and the
+    # erase is refused (Task 6).
+    nenv = env if env.mode == "native" else Env(env.browser, env.base, "native", env.old_ref, env.old_html, env.new_html)
+    judged("Start fresh that leaves a waiting account fold in place", erase_while_fold_pending(nenv, sabotage=KEEP_WAITING_FOLD),
            ["S5"], [("S5", "waiting fold landed")])
     carried = _carried(load_fixture(SAVES / "retired-account.json", "retired-account"))
-    judged("Start fresh that ends a waiting fold without its guide and Hindi form", erase_while_fold_pending(env, sabotage=NO_CARRY),
+    judged("Start fresh that ends a waiting fold without its guide and Hindi form", erase_while_fold_pending(nenv, sabotage=NO_CARRY),
            ["S5"], [("S5", "not %s and %s, which only hikmat_current held" % (carried["gender"], carried["mascot"]))])
     judged("an account fold tried before the unsendable queues are gone", retire_frees_queue_room(env, prelude=LATE_QUEUE_DROP),
            ["S6"], [("S6", "hikmat_current is still there")])
     # S7 and the native copy's checks need a phone with the app's native side. The self-test runs
     # once, in the first mode, so it brings its own.
-    nenv = env if env.mode == "native" else Env(env.browser, env.base, "native", env.old_ref, env.old_html, env.new_html)
     judged("Start fresh that removes hikmat_current whether or not its save lands",
            erase_refused_while_fold_pending(nenv, sabotage=FOLD_GOES_FIRST),
            ["S7"], [("S7", "hikmat_current went although localStorage refused the erase")])
@@ -3687,6 +4160,20 @@ def t_self_test(env, report):
            ["F4"], [("F4", "polluted")])
     judged("a file that holds every profile on the phone", save_bring_round_trip(env, sabotage=FILE_HOLDS_OTHERS),
            ["F1b"], [("F1b", "S-0042")])
+    judged("an Erase with no 600 ms guard", erase_guard(env, sabotage=NO_ERASE_GUARD),
+           ["U2"], [("U2", "as the sheet opened")])
+    judged("an Erase under her thumb", erase_confirm_layout(env, sabotage=ERASE_UNDER_THUMB),
+           ["U1"], [("U1", "Erase lies within 16 px")])
+    judged("a restore that replaces her state", restore_keeps_new_play(env, sabotage=RESTORE_REPLACES),
+           ["U7"], [("U7", "earned after the erase")])
+    judged("a restore that keeps the undo copy's eraseGen", restore_beats_stale_native(nenv, sabotage=RESTORE_OLD_ERASEGEN),
+           ["U6"], [("U6", "stale native copy")])
+    judged("an undo copy that is never removed", undo_expires(env, prelude=UNDO_NEVER_SWEPT),
+           ["U5"], [("U5", "still in")])
+    judged("an undo copy kept in localStorage only", undo_survives_webview_wipe(nenv, sabotage=UNDO_LOCAL_ONLY),
+           ["U4"], [("U4", "no undo row")])
+    judged("an undo copy that forgets the ended fold", undo_brings_back_waiting_fold(nenv, sabotage=UNDO_FORGETS_FOLD),
+           ["U9"], [("U9", "S-0042")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------

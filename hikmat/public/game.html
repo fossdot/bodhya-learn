@@ -639,6 +639,12 @@
   .btn.danger { background:#fff; color:#b91c1c; box-shadow:var(--shadow-sm); }
   .btn.danger:hover { color:#991b1b; }
   [data-theme="dark"] .btn.danger { background:#2a1d24; color:#fca5a5; }
+  /* Erase on the Start fresh confirm sheet (Figma 23:244): the same quiet red, outlined, so it
+     reads as a choice and never as the main button. Keep it, below it, is the main button. */
+  .btn.danger.outline { box-shadow:none; border:2px solid currentColor; }
+  /* Navy on the saffron gradient, as Figma draws Keep it: 6.1:1 to 8.3:1 across the gradient,
+     where white is 2.0:1 to 2.7:1. Used by the sheets added in v8; the rest keep white for now. */
+  .btn.primary.ink { color:#1a1b3a; }
   .profileface { font-size:44px; line-height:1; }
   .bandpick { display:flex; flex-wrap:wrap; gap:8px; }
   .bandchip { display:inline-flex; align-items:center; gap:6px; background:#fff; border:2px solid var(--line); border-radius:14px; padding:8px 13px; font-weight:800; font-size:14px; cursor:pointer; color:var(--ink); box-shadow:var(--shadow-sm); }
@@ -2269,6 +2275,8 @@ const nativeRestore = (async function(){
   }
   return changed;
 })();
+// An undo copy past its 7 days is removed at launch, once the native copy has been read.
+nativeRestore.then(() => readUndo()).catch(() => {});
 
 // ---------- Progress: state.progress[courseKey][lessonKey][activityId] = stars(0-3) ----------
 function getStars(ck, lk, aid){ return (((state.progress||{})[ck]||{})[lk]||{})[aid] || 0; }
@@ -4072,7 +4080,7 @@ function askBring(stars){
           <div class="doubttitle"><div class="doubtq">${esc(title)}</div><div class="doubtsub">${esc(body)}</div></div>
           <button class="speakchip" id="bringSay" style="width:48px; height:48px; flex:0 0 auto" aria-label="${escAttr(tx("Hear it","सुनो"))}" title="${escAttr(tx("Hear it","सुनो"))}">🔊</button>
         </div>
-        <button class="btn primary wide" id="bringYes" style="min-height:48px">${esc(yes)}</button>
+        <button class="btn primary ink wide" id="bringYes" style="min-height:48px">${esc(yes)}</button>
         <button class="btn ghost wide" id="bringNo" style="min-height:48px; margin-top:10px">${esc(no)}</button>
       </div>
     </div>`);
@@ -4116,6 +4124,157 @@ async function bringProgressFile(file){
   return { ok:true, stars: totalStars() };
 }
 
+// ---------- Start fresh, and its 7-day undo (rule 11) ----------
+// Start fresh asks on its own sheet, and an erase can be undone for 7 days. The undo copy (D7)
+// lives under hikmat_undo_<id> in localStorage and in Preferences, so a WebView that comes back
+// empty still has it. It is never merged by itself: only "Bring back what I erased" restores it,
+// and an expired one is removed at launch. An erase that has no store for its undo copy does not
+// happen: she is told it failed, and nothing changes.
+const UNDO_DAYS = 7, DAY_MS = 864e5;
+let ERASE_GUARD_MS = 600;            // Erase ignores taps this long after its sheet opens
+function undoKey(){ return "hikmat_undo_" + ((currentStudent && currentStudent.id) || "guest"); }
+function _validUndo(u){ return _isObj(u) && u.kind === "bodhya-erase-undo" && typeof u.until === "number" && isFinite(u.until) && _isObj(u.state); }
+function _withTimeout(p, ms, v){ return Promise.race([p, new Promise(r => setTimeout(() => r(v), ms))]); }
+// The native side for a key other than her state, which mirrorState() alone writes. Each waits
+// for the launch to have read the native copy, and does nothing where there is none.
+async function _nativeGet(key){
+  try { await nativeRestore; } catch(e){}
+  const P = _mirrorOpen && nativePrefs();
+  if(!P) return null;
+  try { const r = await P.get({ key }); return r && typeof r.value === "string" ? r.value : null; } catch(e){ return null; }
+}
+// True only once the value reads back: a write can resolve and still be lost.
+async function _nativePut(key, json){
+  try { await nativeRestore; } catch(e){}
+  const P = _mirrorOpen && nativePrefs();
+  if(!P) return false;
+  try { await P.set({ key, value: json }); const r = await P.get({ key }); return !!r && r.value === json; } catch(e){ return false; }
+}
+async function _nativeDrop(key){
+  try { await nativeRestore; } catch(e){}
+  const P = _mirrorOpen && nativePrefs();
+  try { if(P && typeof P.remove === "function") await P.remove({ key }); } catch(e){}
+}
+async function dropUndo(){ try { localStorage.removeItem(undoKey()); } catch(e){} await _nativeDrop(undoKey()); }
+// The live undo copy, from localStorage or else the native store, or null. An expired one is
+// removed from both.
+async function readUndo(){
+  let u = null;
+  try { u = JSON.parse(localStorage.getItem(undoKey())); } catch(e){}
+  if(!_validUndo(u)){ u = null; try { u = JSON.parse(await _nativeGet(undoKey())); } catch(e){} if(!_validUndo(u)) u = null; }
+  if(u && Date.now() > u.until){ await dropUndo(); return null; }
+  return u;
+}
+// What an erase of `st` keeps. A waiting account fold ends with the erase (eraseWaitingFold), and
+// its stars were never in her profile: they are in the account's own key, which nothing deletes.
+// So the copy says which account it was, by id and never by name, and the restore folds it back.
+function undoCopyOf(st){
+  const now = Date.now();
+  const u = { kind:"bodhya-erase-undo", v:1, erasedAt: now, until: now + UNDO_DAYS * DAY_MS, state: JSON.parse(JSON.stringify(st)) };
+  const acct = waitingAccount();
+  if(acct && acct.id) u.fold = { id: String(acct.id), gender: acct.gender, mascot: acct.mascot };
+  return u;
+}
+// Her state with the undo copy brought back: her current settings and everything earned since
+// the erase stay, every erased star returns, and eraseGen goes one above both copies, so no copy
+// from before the restore (the erased one, say, in a native store that lost a write) can win.
+function mergeRestore(cur, u){
+  let r = mergeSavedState(JSON.parse(JSON.stringify(cur)), JSON.parse(JSON.stringify(u.state)), { sameLearner:true });
+  if(u.fold && u.fold.id){
+    let acct = null;
+    try { acct = JSON.parse(localStorage.getItem(stateKeyFor(u.fold.id))); } catch(e){}
+    if(acct) r = mergeSavedState(r, acct);   // another learner's, as the fold itself merges
+    carryMascotAndGender(r, u.fold);
+  }
+  r.eraseGen = Math.max(eraseGenOf(cur), eraseGenOf(u.state)) + 1;
+  return r;
+}
+// Start fresh. True once the erase is kept and its undo copy is somewhere; false when nothing
+// changed.
+async function eraseProgress(){
+  const before = state, foldWaitedBefore = endFoldWhenKept;
+  const uj = JSON.stringify(undoCopyOf(before));
+  const localUndo = writeLocal(undoKey(), uj);
+  const nativeUndo = await _withTimeout(_nativePut(undoKey(), uj), 5000, false);
+  if(!localUndo && !nativeUndo) return false;
+  // Her settings are not her progress. Language, sound, theme, guide and the way Hindi addresses
+  // her all ride across the erase.
+  const keep = { lang: state.lang, sound: state.sound, theme: state.theme,
+                 gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
+  // eraseGen goes up by one, so that in every launch merge from now on (mergeCopy) the erased
+  // state beats any copy from before it: a native write that was lost, a stale backup, a fold.
+  state = Object.assign(fresh(), keep, { eraseGen: eraseGenOf(before) + 1 });
+  // "Every star on this phone" includes an account fold still waiting for room. Its stars go
+  // with hers, and the guide and Hindi form it carries stay, as they would had it landed first.
+  eraseWaitingFold(state);
+  const kept = save();
+  // The native copy counts only once it reads back as the erased state.
+  const mirrored = await _withTimeout(mirrorNow(stateKey(), JSON.stringify(state)), 5000, false);
+  if(!kept && !mirrored){
+    // Neither copy took it, so nothing was erased, and keeping the erase in memory would store it
+    // later with some other save, after she was told it had not happened.
+    state = before; endFoldWhenKept = foldWaitedBefore;
+    await dropUndo();
+    return false;
+  }
+  return true;
+}
+// {ok, stars} once the restore is kept and the undo copy gone; {ok:false, error} otherwise, and
+// nothing changed.
+async function restoreErased(){
+  const u = await readUndo();
+  if(!u) return { ok:false, error:"gone" };
+  const before = state, foldWaitedBefore = endFoldWhenKept;
+  state = mergeRestore(state, u);
+  // A fold the restore brought back must not land again: hikmat_current goes with the first save
+  // that lands, as it does after an erase.
+  if(u.fold && waitingAccount()) endFoldWhenKept = true;
+  const kept = save();
+  const mirrored = await _withTimeout(mirrorNow(stateKey(), JSON.stringify(state)), 5000, false);
+  if(!kept && !mirrored){ state = before; endFoldWhenKept = foldWaitedBefore; return { ok:false, error:"notsaved" }; }
+  await dropUndo();
+  try { refreshTop(); } catch(e){}
+  try { rerender(); } catch(e){}
+  return { ok:true, stars: totalStars() };
+}
+// The confirm sheet (Figma 23:244), bottom-anchored like every sheet: title, body, undo note,
+// Erase, a 32 px gap, then Keep it last, where the thumb that tapped Start fresh still is.
+// done(true) after an erase that was kept, done(false) after one that could not be, and
+// done(null) when she keeps it (Keep it, or a tap outside the sheet).
+function openEraseSheet(done){
+  const ex = document.getElementById("eraseWrap"); if(ex) ex.remove();
+  const title = tx("Erase your progress?","अपनी प्रगति मिटानी है?");
+  const body = tx("Your stars, lessons and gems on this phone will be erased. Your settings stay.",
+                  "इस फ़ोन से तुम्हारे सितारे, पाठ और रत्न मिट जाएँगे। तुम्हारी सेटिंग वैसी ही रहेगी।");
+  const note = tx("You can undo this for 7 days.","7 दिन तक इसे वापस लाया जा सकता है।");
+  const w = el(`<div class="sheetwrap" id="eraseWrap">
+    <div class="sheet settingsheet" role="dialog" aria-modal="true" aria-label="${escAttr(title)}">
+      <div class="doubthead">
+        <div class="doubttitle"><div class="doubtq">${esc(title)}</div><div class="doubtsub">${esc(body)}</div></div>
+        <button class="speakchip" id="eraseSay" style="width:48px; height:48px; flex:0 0 auto" aria-label="${escAttr(tx("Hear it","सुनो"))}" title="${escAttr(tx("Hear it","सुनो"))}">🔊</button>
+      </div>
+      <div style="color:var(--muted); font-size:15px; font-weight:600; margin:6px 0 18px">${esc(note)}</div>
+      <button class="btn danger outline wide" id="eraseYes" style="min-height:56px">${esc(tx("Erase","मिटाओ"))}</button>
+      <button class="btn primary ink wide" id="eraseKeep" style="min-height:56px; margin-top:32px">${esc(tx("Keep it","रहने दो"))}</button>
+    </div>
+  </div>`);
+  document.body.appendChild(w);
+  const openedAt = Date.now();
+  let busy = false;
+  const shut = () => { stopSpeech(); w.remove(); };
+  w.querySelector("#eraseYes").onclick = async () => {
+    if(busy || Date.now() - openedAt < ERASE_GUARD_MS) return;
+    busy = true; sfx.tap();
+    const ok = await eraseProgress();
+    shut();
+    done(ok);
+  };
+  w.querySelector("#eraseKeep").onclick = () => { if(busy) return; sfx.back(); shut(); done(null); };
+  w.onclick = e => { if(e.target === w && !busy){ sfx.back(); shut(); done(null); } };
+  w.querySelector("#eraseSay").onclick = () => speak(title + " " + body + " " + note, state.lang === "hi" ? "hi" : "en");
+  srSay(title);
+}
+
 function openProgressSheet(note){
   const _ex = document.getElementById("progWrap"); if(_ex) _ex.remove();
   sfx.tap(); stopSpeech();
@@ -4147,8 +4306,8 @@ function openProgressSheet(note){
       <button class="btn ghost wide" id="progBring" style="min-height:48px; margin-bottom:10px">📂 ${esc(tx("Bring my progress","अपनी प्रगति वापस लाओ"))}
         <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(tx("Nothing you have now is lost","अभी का कुछ भी नहीं मिटेगा"))}</small></button>
       <input type="file" id="progFile" hidden>
-      <button class="btn danger wide" id="progWipe">${tx("Start fresh","नए सिरे से शुरू करो")}</button>
-      <button class="btn ghost wide" id="dClose">${tx("Close","बंद करो")}</button>
+      <button class="btn ghost wide" id="dClose" style="min-height:48px">${tx("Close","बंद करो")}</button>
+      <button class="btn danger wide" id="progWipe" style="min-height:48px; margin-top:24px">${tx("Start fresh","नए सिरे से शुरू करो")}</button>
     </div>
   </div>`);
   document.body.appendChild(sheet);
@@ -4161,47 +4320,44 @@ function openProgressSheet(note){
     warn.querySelector("span").textContent = text; srSay(text);
   };
   const unsay = () => { warn.style.display = "none"; warn.dataset.msg = ""; };
-  let armed = false, erasing = false, filing = false;
-  wipe.onclick = async () => {
-    if(erasing) return;
-    if(!armed){
-      armed = true; sfx.tap();
-      say("erasewarn", tx("This erases every star and gem on this phone. It cannot be undone.",
-                          "इससे इस फ़ोन के सारे सितारे और रत्न मिट जाएँगे। यह वापस नहीं आएगा।"));
-      wipe.textContent = tx("Yes, erase everything","हाँ, सब कुछ मिटा दो");
-      return;
-    }
-    // Her settings are not her progress. Language, sound, theme, guide and the way Hindi
-    // addresses her all ride across the wipe — losing those too would be a second punishment
-    // for a tap that was only ever about stars.
-    const keep = { lang: state.lang, sound: state.sound, theme: state.theme,
-                   gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
-    const before = state, foldWaitedBefore = endFoldWhenKept;
+  let erasing = false, filing = false;
+  wipe.onclick = () => {
+    if(erasing || filing) return;
+    sfx.tap(); unsay();
     erasing = true;
-    // eraseGen goes up by one, so that in every launch merge from now on (mergeCopy) the erased
-    // state beats any copy from before it: a native write that was lost, a stale backup, a fold.
-    state = Object.assign(fresh(), keep, { eraseGen: eraseGenOf(before) + 1 });
-    // "Every star on this phone" includes an account fold still waiting for room. Its stars go
-    // with hers, and the guide and Hindi form it carries stay, as they would had it landed first.
-    eraseWaitingFold(state);
-    const kept = save();
-    // The native copy counts only once it reads back as the erased state. On the web there is
-    // none, and the read-back can take a moment on a slow phone, so it is given 5 s.
-    const mirrored = await Promise.race([mirrorNow(stateKey(), JSON.stringify(state)),
-                                         new Promise(r => setTimeout(() => r(false), 5000))]);
-    if(!kept && !mirrored){
-      // Neither copy took it, so nothing was erased: the next launch would show every star again.
-      // Saying "erased" now would be untrue, and keeping the erase in memory would store it later
-      // with some other save, after she was told it had not happened. So everything goes back as
-      // it was, and she is told so.
-      state = before; endFoldWhenKept = foldWaitedBefore;
+    openEraseSheet(ok => {
       erasing = false;
-      say("erasefail", tx("Could not erase. Try again.","मिटाया नहीं जा सका। फिर से कोशिश करो।"));
-      return;
-    }
-    sfx.back(); close(); renderHome();
-    srSay(tx("Progress erased.","प्रगति मिटा दी गई।"));
+      if(ok === null) return;
+      if(!ok){ say("erasefail", tx("Could not erase. Try again.","मिटाया नहीं जा सका। फिर से कोशिश करो।")); return; }
+      // The home screen she goes back to is the erased one; the sheet stays, so she sees that it
+      // happened and where to bring it back from.
+      close(); try { renderHome(); } catch(e){}
+      openProgressSheet({ msg:"erased", text: tx("Progress erased. You can bring it back for 7 days.",
+                                                 "प्रगति मिटा दी गई। 7 दिन तक इसे वापस लाया जा सकता है।") });
+    });
   };
+  // The undo row, while a copy is live: "Bring back what I erased", with the days left.
+  readUndo().then(u => {
+    if(!u || !document.body.contains(sheet) || sheet.querySelector("#progUndo")) return;
+    const days = Math.max(1, Math.ceil((u.until - Date.now()) / DAY_MS));
+    const left = days > 1 ? tx(days + " days left", days + " दिन बाकी") : tx("Last day","आज आख़िरी दिन");
+    const row = el(`<button class="btn ghost wide" id="progUndo" data-days="${days}" style="min-height:48px; margin-bottom:10px">↩️ ${esc(tx("Bring back what I erased","मिटाया हुआ वापस लाओ"))}
+      <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(left)}</small></button>`);
+    sheet.querySelector("#dClose").before(row);
+    row.onclick = async () => {
+      if(filing || erasing) return;
+      filing = true; sfx.tap(); unsay();
+      const r = await restoreErased();
+      filing = false;
+      if(r.ok){
+        close();
+        openProgressSheet({ msg:"restored", text: tx("Your progress is back: " + r.stars + " stars",
+                                                     "तुम्हारी प्रगति वापस आ गई: " + r.stars + " सितारे") });
+        return;
+      }
+      say("undofail", tx("Could not bring it back. Try again.","वापस नहीं लाया जा सका। फिर से कोशिश करो।"));
+    };
+  });
   sheet.querySelector("#progSave").onclick = async () => {
     if(filing || erasing) return;
     filing = true; sfx.tap(); unsay();
