@@ -237,6 +237,15 @@ Tests that replay real saves through the update must prove that no star total dr
 - [ ] **Step 4: Run** everything in both modes. Expected: PASS.
 - [ ] **Step 5: Commit:** "Every save gets a second copy outside the WebView, and it can't overwrite one it hasn't read".
 
+**As built (5 Nov):**
+- `mergeCopy` compares `eraseGen` first, also when `localWasMissing`. Only with equal `eraseGen` does `localWasMissing` pick the native copy as the base. Whatever localStorage holds by the time the native read returns came from this boot (an account fold that landed on an empty WebView, say), and that is older than an erase the native copy has already seen. N6b (b) is that case.
+- A state the launch merge puts in place gets the same boot defaults as a loaded one (`withBootDefaults`).
+- The "neither copy took the erase" case is its own test, **N6c `erase_refused_everywhere`**: the S7 phone, with the fake Preferences refusing every write (`refuse_writes`). The erase handler waits up to 5 s for `mirrorNow`, which counts the native copy only once it reads back as the erased state. If neither copy took it, the state and the waiting fold go back as they were, the sheet stays open, and she sees "Could not erase. Try again." / "मिटाया नहीं जा सका। फिर से कोशिश करो।" A second tap while the erase is under way does nothing. The Hindi line goes into Task 6's Hindi check with the other new lines.
+- Self-test sabotages: a mirror gate that opens before the read (N9), a `mergeCopy` that ignores `eraseGen` (N6b), Start fresh that leaves a waiting fold in place with a stale native copy (N6b (a)), and a native copy that simply replaces hers (N4, which must name the gems).
+- N4 lists a gem drop before the star drops, so its clipped report always shows it.
+- The harness's own Preferences probe checks that `harness_probe` is among the keys, not the only one, since the app's mirror writes are there too.
+- Run on 5 Nov: 291 passed, 0 failed, web and native, with the self-test.
+
 ### Task 5: Save my progress / Bring my progress (rule 7)
 
 **Files:** in `index.html`, `openProgressSheet` (~3617): add `#progSave` and `#progBring` buttons, each with `min-height:48px`. Add a hidden `<input type="file" id="progFile">` with no `accept`, because Android pickers hide WhatsApp downloads saved as octet-stream.

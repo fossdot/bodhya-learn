@@ -1259,6 +1259,25 @@ window.HIKMAT_ICONS = Object.assign(window.HIKMAT_ICONS || {}, {
    speech (English + Hindi) and localStorage for progress.
    ============================================================ */
 
+// Which saved states this phone held when the app opened, taken before anything can write one.
+// It is the first statement of this script on purpose: the account fold, a boot save or the cache
+// move must not get in first. The launch merge (nativeRestore) needs it, because a WebView whose
+// data was wiped looks, a moment after boot, like a phone with a brand-new profile, and only this
+// tells the two apart. {"hikmat_state_<id>": true when the stored value parses to an object}.
+const BOOT_STATE = (function(){
+  const out = {};
+  try {
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || k.indexOf("hikmat_state_") !== 0) continue;
+      let ok = false;
+      try { const v = JSON.parse(localStorage.getItem(k)); ok = !!v && typeof v === "object" && !Array.isArray(v); } catch(e){}
+      out[k] = ok;
+    }
+  } catch(e){}
+  return out;
+})();
+
 // ---------- App-level settings (an admin dashboard / backend will manage these) ----------
 const SETTINGS = {
   appName: "Bodhya Learn",
@@ -1956,10 +1975,63 @@ const contentReady = (async function(){
     if(await contentStore.idbSet(key, value)){ try { localStorage.removeItem(key); } catch(e){} }
   }
 })();
-// Rule 6 keeps a second copy of every save outside the WebView. That copy does not exist yet in
-// this build, so this does nothing. save() still calls it for every save, the refused ones too,
-// because on a full phone the second copy is the only place a refused save can still go.
-function mirrorState(key, json){}
+// Rule 6 keeps a second copy of every save outside the WebView: Capacitor Preferences, which
+// Android keeps in shared_prefs/CapacitorStorage.xml. A WebView can come back empty (its data
+// cleared, a broken update, a reinstall that restored only some files); that file does not go
+// with it, and the launch merge (nativeRestore) brings her progress back from it. save() calls
+// mirrorState for every save, the refused ones too, because on a full phone the second copy is
+// the only place a refused save can still go.
+//
+// The gate. Nothing is written to the native copy until the launch has READ it. A save at boot
+// (the account fold, the server's defaults, a first-launch screen) on a phone whose WebView came
+// back empty would otherwise overwrite the only copy of her progress with an empty profile a moment
+// before the launch looked at it. Until the gate opens, mirrorState only remembers the latest
+// call. Once it is open, at most one write is in flight and the latest one wins: every save holds
+// her whole state, so a write that is overtaken loses nothing. On the web there is no native
+// copy, and the gate never opens.
+// These are `let`s declared above save(), because save() can run during boot, and a `let` further
+// down this file would still be in its temporal dead zone then.
+let _mirrorOpen = false, _mirrorPending = null, _mirrorBusy = null, _mirrorLast = null;
+function nativePrefs(){
+  const P = capPlugin("Preferences");
+  return P && typeof P.get === "function" && typeof P.set === "function" ? P : null;
+}
+function mirrorState(key, json){
+  _mirrorPending = { key, json };
+  if(_mirrorOpen) _mirrorPump();
+}
+function _mirrorPump(){
+  if(_mirrorBusy) return _mirrorBusy;
+  const job = _mirrorPending;
+  if(!job) return Promise.resolve();
+  _mirrorPending = null;
+  const P = nativePrefs();
+  let w;
+  try { w = P ? Promise.resolve(P.set({ key: job.key, value: job.json })).then(() => true, () => false) : Promise.resolve(false); }
+  catch(e){ w = Promise.resolve(false); }
+  _mirrorBusy = w.then(ok => {
+    _mirrorLast = { key: job.key, json: job.json, ok };
+    _mirrorBusy = null;
+    if(_mirrorPending && _mirrorOpen) _mirrorPump();
+  });
+  return _mirrorBusy;
+}
+// For the writes she is told about (Start fresh, and the undo in Task 6): resolves true only once
+// the native copy has been read back and holds this state or a later save of it. A write can
+// resolve and still be lost, so the read-back is what counts. False on the web, where there is
+// no native copy, and whenever the launch could not read it (the gate stays shut).
+async function mirrorNow(key, json){
+  try { await nativeRestore; } catch(e){}
+  if(!_mirrorOpen) return false;
+  mirrorState(key, json);
+  while(_mirrorBusy || _mirrorPending) await _mirrorPump();
+  const last = _mirrorLast;
+  if(!last || last.key !== key || !last.ok) return false;
+  try {
+    const r = await nativePrefs().get({ key });
+    return !!r && r.value === last.json;
+  } catch(e){ return false; }
+}
 // Returns true when localStorage kept it. A false save is not an error she ever sees: the state
 // in memory still holds everything, the game carries on, and the next save that fits writes all
 // of it, since every save writes her whole state.
@@ -1978,8 +2050,14 @@ function save(){
 // Fold one saved state into another, taking the BETTER of each value — never the newer one.
 // Stars and gems only ever go up in this game, and a merge that could lower either would be a
 // child watching her own work get smaller.
-function mergeSavedState(into, from){
+//
+// opts.sameLearner: both are copies of the SAME learner (her localStorage and her native copy,
+// or a progress file she saved). Each attempt is then in both, so attempts take the higher count
+// instead of adding up, and merging her with herself changes nothing. Without it the two are
+// different learners (the account fold), and their attempts add up as they always did.
+function mergeSavedState(into, from, opts){
   if(!from) return into;
+  const same = !!(opts && opts.sameLearner);
   into.progress = into.progress || {};
   const p = from.progress || {};
   for(const ck in p) for(const lk in p[ck]) for(const aid in p[ck][lk]){
@@ -1994,7 +2072,8 @@ function mergeSavedState(into, from){
     const a = into.levelTests[n] || { passed:false, bestPct:0, attempts:0 }, b = tp[n] || {};
     into.levelTests[n] = { passed: !!(a.passed || b.passed),
                            bestPct: Math.max(a.bestPct || 0, b.bestPct || 0),
-                           attempts: (a.attempts || 0) + (b.attempts || 0) };
+                           attempts: same ? Math.max(a.attempts || 0, b.attempts || 0)
+                                          : (a.attempts || 0) + (b.attempts || 0) };
   }
   // The seen-question lists are what stop a retake serving the same paper twice, so they union
   // rather than replace — dropping either side would hand her questions she has already answered.
@@ -2009,6 +2088,29 @@ function mergeSavedState(into, from){
   into.lastLoc = Object.assign({}, from.lastLoc || {}, into.lastLoc || {});         // resume points: the state she now uses wins
   if(!into.lastMode && from.lastMode) into.lastMode = from.lastMode;
   return into;
+}
+
+// Rule 2 for her two copies, localStorage (`local`) and the native one (`other`), at launch.
+// eraseGen counts her erases (Start fresh adds 1), so it decides first: the copy with the higher
+// eraseGen is the one after an erase, and it wins outright. Merged into, the older copy would
+// bring back every star she erased. That holds even when localStorage held nothing at boot:
+// whatever it holds by now came from this boot (an account fold landing on the first launch
+// with room, say), and that is older than an erase the native copy has already seen.
+// With equal eraseGen, both copies are her and the higher of each value wins. Which one is the
+// base, whose settings stand, depends on `localWasMissing`: a WebView that came back empty has
+// only boot defaults, so the native copy is the base and her settings come from it.
+function eraseGenOf(st){ const g = st && st.eraseGen; return typeof g === "number" && isFinite(g) && g > 0 ? Math.floor(g) : 0; }
+function mergeCopy(local, other, localWasMissing){
+  if(!other || typeof other !== "object") return local;
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const gl = eraseGenOf(local), go = eraseGenOf(other);
+  if(gl > go) return local;
+  if(go > gl) return clone(other);
+  if(localWasMissing){
+    const m = mergeSavedState(clone(other), local, { sameLearner:true });
+    return carryMascotAndGender(m, local);
+  }
+  return mergeSavedState(clone(local), other, { sameLearner:true });
 }
 
 // A device that was signed in when accounts were switched off must not look wiped on the next
@@ -2112,6 +2214,61 @@ function endAccountFold(){
 retireAccounts();          // before loadState(): it decides WHICH state we are about to load
 
 let state = loadState();
+
+// The defaults a loaded state gets at boot (see the boot section at the end of this file), for a
+// state the launch merge puts in its place.
+function withBootDefaults(st){
+  st.progress = st.progress || {};
+  st.hindi = false;
+  st.lang = st.lang || "en";
+  st.sound = st.sound !== false;
+  st.theme = st.theme || "light";
+  st.testSeen = st.testSeen || {};
+  st.levelTests = st.levelTests || {};
+  st.videosSeen = st.videosSeen || {};
+  st.lastLoc = st.lastLoc || {};
+  st.seenTypes = st.seenTypes || {};
+  return st;
+}
+
+// True when localStorage held no readable state for this profile as the app opened. Taken from
+// BOOT_STATE, so the fold or a boot save that has written one since cannot hide that.
+const localWasMissing = !BOOT_STATE[stateKey()];
+
+// Rules 2 and 6 at launch: read the native copy, merge it with localStorage's (mergeCopy), then
+// open the mirror gate and write the merged state to both. Writing both also seeds a native copy
+// that does not exist yet (the first launch after the update) and raises an older one. Resolves
+// true when the merge changed her state; the screen is then drawn again from it. Never rejects.
+// On the web, or in an app without the Preferences plugin, it resolves false at once and the gate
+// stays shut. If the read fails twice, the gate stays shut for this launch too: a copy that could
+// not be read must not be overwritten, and localStorage alone carries on as before v8.
+const nativeRestore = (async function(){
+  let P = nativePrefs();
+  if(!P && window.Capacitor){
+    // The bridge can register its plugins a little after the page's scripts run.
+    if(document.readyState !== "complete") await new Promise(r => window.addEventListener("load", r, { once:true }));
+    for(let t = 0; t < 2000 && !(P = nativePrefs()); t += 100) await new Promise(r => setTimeout(r, 100));
+  }
+  if(!P) return false;
+  const key = stateKey();
+  let got = null, read = false;
+  for(let i = 0; i < 2 && !read; i++){ try { got = await P.get({ key }); read = true; } catch(e){} }
+  if(!read) return false;
+  let other = null;
+  try { const v = JSON.parse(got && got.value); if(v && typeof v === "object" && !Array.isArray(v)) other = v; } catch(e){}
+  const before = JSON.stringify(state);
+  const merged = mergeCopy(state, other, localWasMissing);
+  if(merged !== state) state = withBootDefaults(merged);
+  _mirrorOpen = true;
+  save();
+  const changed = JSON.stringify(state) !== before;
+  if(changed){
+    // As the theme and language toggles do: the top bar, then the screen she is on.
+    try { refreshTop(); } catch(e){}
+    try { rerender(); } catch(e){}
+  }
+  return changed;
+})();
 
 // ---------- Progress: state.progress[courseKey][lessonKey][activityId] = stars(0-3) ----------
 function getStars(ck, lk, aid){ return (((state.progress||{})[ck]||{})[lk]||{})[aid] || 0; }
@@ -3821,8 +3978,9 @@ function openProgressSheet(){
   const close = () => sheet.remove();
   const wipe = sheet.querySelector("#progWipe");
   const warn = sheet.querySelector("#progWarn");
-  let armed = false;
-  wipe.onclick = () => {
+  let armed = false, erasing = false;
+  wipe.onclick = async () => {
+    if(erasing) return;
     if(!armed){
       armed = true; sfx.tap();
       warn.style.display = "block";
@@ -3838,11 +3996,32 @@ function openProgressSheet(){
     // for a tap that was only ever about stars.
     const keep = { lang: state.lang, sound: state.sound, theme: state.theme,
                    gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
-    state = Object.assign(fresh(), keep);
+    const before = state, foldWaitedBefore = endFoldWhenKept;
+    erasing = true;
+    // eraseGen goes up by one, so that in every launch merge from now on (mergeCopy) the erased
+    // state beats any copy from before it: a native write that was lost, a stale backup, a fold.
+    state = Object.assign(fresh(), keep, { eraseGen: eraseGenOf(before) + 1 });
     // "Every star on this phone" includes an account fold still waiting for room. Its stars go
     // with hers, and the guide and Hindi form it carries stay, as they would had it landed first.
     eraseWaitingFold(state);
-    save();
+    const kept = save();
+    // The native copy counts only once it reads back as the erased state. On the web there is
+    // none, and the read-back can take a moment on a slow phone, so it is given 5 s.
+    const mirrored = await Promise.race([mirrorNow(stateKey(), JSON.stringify(state)),
+                                         new Promise(r => setTimeout(() => r(false), 5000))]);
+    if(!kept && !mirrored){
+      // Neither copy took it, so nothing was erased: the next launch would show every star again.
+      // Saying "erased" now would be untrue, and keeping the erase in memory would store it later
+      // with some other save, after she was told it had not happened. So everything goes back as
+      // it was, and she is told so.
+      state = before; endFoldWhenKept = foldWaitedBefore;
+      erasing = false;
+      const m = tx("Could not erase. Try again.","मिटाया नहीं जा सका। फिर से कोशिश करो।");
+      warn.style.display = "block";
+      warn.querySelector("span").textContent = m;
+      srSay(m);
+      return;
+    }
     sfx.back(); close(); renderHome();
     srSay(tx("Progress erased.","प्रगति मिटा दी गई।"));
   };

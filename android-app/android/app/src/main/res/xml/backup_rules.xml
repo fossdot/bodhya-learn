@@ -7,7 +7,14 @@
   a reinstall gets their stars back. Android 12+ reads data_extraction_rules.xml instead — keep
   the two in step, and see that file for the full reasoning and for the data-deletion-page
   precondition that must be met before a build carrying either of them is rolled out.
+
+  Since v8 the state is also mirrored to shared_prefs/CapacitorStorage.xml (the Preferences
+  plugin), so it survives a WebView whose data is lost. That file holds the same anonymous state
+  as app_webview, plus the 7-day undo copy that Start fresh keeps. It is included beside
+  app_webview in every section below, in both files, so a reinstall brings the second copy back
+  too and the launch merge can use it.
 -->
 <full-backup-content>
     <include domain="root" path="app_webview" />
+    <include domain="sharedpref" path="CapacitorStorage.xml" />
 </full-backup-content>

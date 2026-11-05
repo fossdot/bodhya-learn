@@ -391,6 +391,7 @@ class Native:
     Switches a test can flip between calls:
       drop_next_write    the next Preferences.set resolves but stores nothing: a lost native write
       get_delay_ms       every Preferences.get waits this long before it reads: a slow bridge at boot
+      refuse_writes      while true, every Preferences.set is rejected: a phone whose disk is full
       cancel_next_share  the next Share.share is rejected with "Share canceled", as SharePlugin
                          does when she closes the share sheet without picking anything
     `log` holds every call in the order the bridge received it.
@@ -405,6 +406,7 @@ class Native:
         self.log = []
         self.drop_next_write = False
         self.get_delay_ms = 0
+        self.refuse_writes = False
         self.cancel_next_share = False
 
     @property
@@ -455,6 +457,9 @@ class Native:
             return {"value": v}
         if op == "Preferences.set":
             v = a.get("value") if isinstance(a.get("value"), str) else None
+            if self.refuse_writes:
+                self._note("set", key=key, size=len(v or ""), refused=True)
+                return {"__error": "Unable to write to storage"}
             if self.drop_next_write:
                 self.drop_next_write = False
                 self._note("set", key=key, size=len(v or ""), dropped=True)
@@ -1322,7 +1327,8 @@ def t_harness(env, report):
               return out;
             }""")
             report.check(r["missing"] == {"value": None} and r["got"] == {"value": "one"}
-                         and r["keys"] == {"keys": ["harness_probe"]} and r["noKey"] == "Must provide key",
+                         and "harness_probe" in (r["keys"] or {}).get("keys", [])  # the app's mirror keys are there too
+                         and r["noKey"] == "Must provide key",
                          "%s fake Preferences: null for a missing key, set/get/keys, 'Must provide key'" % tag)
             report.check(r["file"] == {"uri": "file:///cache/probe.json"}
                          and N.files.get("probe.json", {}).get("directory") == "CACHE"
@@ -2352,6 +2358,492 @@ def level_test_promotes(env, sabotage=None, prelude=None):
              "no lesson locked at zero stars, with the test due, after passing, or after a relaunch"))]
 
 
+# ---------------------------------------------------------------- Task 4: the native copy -----
+# Rule 6: every save is mirrored to Capacitor Preferences, outside the WebView, but only once the
+# launch has read the native copy, and the launch merges that copy back in (rule 2: the higher
+# value wins; an erase, marked by a higher eraseGen, wins outright).
+
+GUEST = "hikmat_state_guest"
+EGEN_JS = "() => (typeof state.eraseGen === 'number' ? state.eraseGen : 0)"
+ROOT_HINDI_JS = r"""() => /[ऀ-ॿ]/.test((document.getElementById("root") || document.body).innerText)"""
+# Records, before any game script, the first localStorage write and whether BOOT_STATE existed by
+# then. A const read before its declaration throws, hence the try.
+FIRST_SET = ("/* e2e: the first localStorage write */(function(){window.__e2eFirstSet=null;var s=Storage.prototype.setItem;"
+             "Storage.prototype.setItem=function(k){if(window.__e2eFirstSet===null){var b=false;"
+             "try{b=typeof BOOT_STATE!=='undefined';}catch(e){}window.__e2eFirstSet={key:String(k),bootState:b};}"
+             "return s.apply(this,arguments);};})();")
+
+
+def _mid():
+    return load_fixture(SAVES / "v7-midway.json", "v7-midway")
+
+
+def _local(ph, key=GUEST):
+    return ph.page.evaluate("(k) => localStorage.getItem(k)", key)
+
+
+def _settled(ph, wait_s=3.0, key=GUEST):
+    """(local, native) for `key`, once they agree or wait_s has passed. A mirror write is not awaited
+    by anything, so it can still be on its way when a launch is over."""
+    end = time.monotonic() + wait_s
+    while True:
+        loc, nat = _local(ph, key), ph.NATIVE.prefs.get(key)
+        if (loc is not None and loc == nat) or time.monotonic() >= end:
+            return loc, nat
+        ph.page.wait_for_timeout(100)
+
+
+def _agree(ph, probs, when):
+    loc, nat = _settled(ph)
+    if nat is None:
+        probs.append("%s the native copy is missing" % when)
+    elif loc != nat:
+        probs.append("%s the native copy differs from localStorage: %s" % (when, _clip(diff(_parsed(loc), _parsed(nat), values=False), 3)))
+    return _parsed(loc), _parsed(nat)
+
+
+def _settings(st):
+    s = _dict(st)
+    return {f: s.get(f) for f in ("lang", "theme", "sound", "gender", "mascot")}
+
+
+def _lowered_stars(st, by=1, coins=500):
+    """st with every star `by` lower (not below 0) and `coins` fewer gems: an older copy of her."""
+    out = json.loads(compact(st))
+    for ck, ls in _dict(out.get("progress")).items():
+        for lk, g in _dict(ls).items():
+            for aid, v in _dict(g).items():
+                g[aid] = max(0, (_num(v) or 0) - by)
+    out["coins"] = max(0, (_num(out.get("coins")) or 0) - coins)
+    return out
+
+
+def _rel(code, tag, probs, good):
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 4) if probs else good))]
+
+
+def mirror_follows_save(env, sabotage=None, prelude=None):
+    """N1. Within 2 s of a save, the native copy holds what localStorage holds."""
+    tag = "[%s] mirror_follows_save" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        _, nat = _agree(ph, probs, "2 s after her save,")
+        if nat is not None and _learn_star(nat, ck, lk) != 3:
+            probs.append("the native copy does not hold the new star at %s/%s" % (ck, lk))
+
+    return _rel("N1", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "the native copy held her new star, and all of localStorage's copy, within 2 s of the save")
+
+
+def first_launch_seeds_mirror(env, sabotage=None, prelude=None):
+    """N2. The first launch of v8 on a v7 phone: nothing native yet. The launch writes it."""
+    tag = "[%s] first_launch_seeds_mirror" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        _, nat = _agree(ph, probs, "after the first launch,")
+        if nat is not None:
+            probs.extend(lowered(fx.seed_states[GUEST], nat, "native " + GUEST))
+
+    return _rel("N2", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "the first launch seeded the native copy with all of her progress")
+
+
+def empty_webview_restored(env, sabotage=None, prelude=None):
+    """N3. Her WebView's data is gone and the native copy holds everything. The launch must bring
+    it all back, her settings with it, write it to localStorage, and draw the screen in them."""
+    tag = "[%s] empty_webview_restored" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed_local({})
+        ph.NATIVE.prefs[GUEST] = fx.local[GUEST]
+        ph.launch("new")
+        if ph.boot_result.get("nativeRestore") is not True:
+            probs.append("nativeRestore resolved %s, not true, although it brought her progress back"
+                         % json.dumps(ph.boot_result.get("nativeRestore")))
+        loc, _ = _agree(ph, probs, "after the restore,")
+        if loc is None:
+            probs.append("localStorage was not rewritten")
+        else:
+            probs.extend(lowered(seed, loc, GUEST) + fields_lost(seed, loc, GUEST))
+        mem = ph.page.evaluate("() => JSON.parse(JSON.stringify(state))")
+        if _settings(mem) != _settings(seed):
+            probs.append("settings are %s, not hers (%s)" % (json.dumps(_settings(mem)), json.dumps(_settings(seed))))
+        if seed.get("lang") == "hi" and not ph.page.evaluate(ROOT_HINDI_JS):
+            probs.append("the screen was not drawn again in her language")
+
+    return _rel("N3", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "with an empty WebView the launch brought back every star and setting from the native copy, rewrote "
+                "localStorage, and drew the screen in her language")
+
+
+def native_lower_never_wins(env, sabotage=None, prelude=None):
+    """N4. The native copy is older: fewer stars, fewer gems. Nothing of hers is lowered, and the
+    native copy is raised to match."""
+    tag = "[%s] native_lower_never_wins" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.NATIVE.prefs[GUEST] = compact(_lowered_stars(seed))
+        ph.launch("new")
+        loc, nat = _agree(ph, probs, "after the launch,")
+        # Gems first: there is one gem count and hundreds of stars, so the report, which shows
+        # only the first few, still says when her gems went down too.
+        gems_first = lambda xs: sorted(xs, key=lambda x: " coins " not in x)
+        if loc is not None:
+            probs.extend(gems_first(lowered(seed, loc, GUEST)))
+        if nat is not None:
+            probs.extend(gems_first(lowered(seed, nat, "native " + GUEST)))
+
+    return _rel("N4", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "an older native copy lowered nothing, and was raised to her stars and gems")
+
+
+def relaunch_does_not_inflate(env, sabotage=None, prelude=None):
+    """N5. Both copies the same. Three launches leave attempts, gems and seen-lists as they were:
+    the launch merge is one learner meeting herself, not two learners adding up."""
+    tag = "[%s] relaunch_does_not_inflate" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.NATIVE.prefs[GUEST] = fx.local[GUEST]
+        for n in range(3):
+            ph.launch("new")
+            loc, _ = _agree(ph, probs, "after launch %d," % (n + 1))
+            ch = changed_numbers(seed, loc or {})
+            if ch:
+                probs.append("after launch %d: %s" % (n + 1, _clip(["%s %s -> %s" % (p, a, b) for p, (a, b) in sorted(ch.items())], 3)))
+                break
+            seen = {k: len(v) for k, v in _dict(_dict(loc).get("testSeen")).items()}
+            want = {k: len(v) for k, v in _dict(seed.get("testSeen")).items()}
+            if seen != want:
+                probs.append("after launch %d the seen-question lists are %s long, not %s" % (n + 1, seen, want))
+                break
+
+    return _rel("N5", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "three launches with both copies alike left attempts, gems and seen-lists as they were")
+
+
+def erase_stays_erased(env, sabotage=None, prelude=None):
+    """N6. Start fresh, and the native copy loses that write. The erase still holds on the next
+    launch and the one after: the stale native copy has the lower eraseGen, so it cannot bring
+    the erased stars back."""
+    tag = "[%s] erase_stays_erased" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        _agree(ph, probs, "before Start fresh,")
+        ph.NATIVE.drop_next_write = True
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        for which in ("the next launch", "the launch after it"):
+            ph.launch("new")
+            shown, egen = ph.page.evaluate(SHOWN_JS), ph.page.evaluate(EGEN_JS)
+            if shown["total"] or shown["coins"]:
+                probs.append("%s shows %s stars and %s gems: the stale native copy brought them back"
+                             % (which, shown["total"], shown["coins"]))
+                break
+            if egen != 1:
+                probs.append("%s has eraseGen %s, not 1" % (which, egen))
+
+    return _rel("N6", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "an erase whose native write was lost stayed erased for two launches, with eraseGen 1")
+
+
+def _s7_phone():
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account without a guest profile on a full phone")
+    del fx.local[GUEST], fx.seed_states[GUEST]
+    fx.fill = True
+    return fx
+
+
+def erase_with_waiting_fold_and_stale_mirror(env, sabotage=None, prelude=None):
+    """N6b. The merges that can follow an erase, all at once. The 232-star bug was a fold that
+    landed after Start fresh, and the launch merge is the same kind of merge.
+    (a) The S5 phone: full, S-0042's fold waiting. The native copy is stale, with the guest
+        profile's stars and eraseGen 0, and it loses the erase's write. Room then appears.
+    (b) The S7 phone: full and with no guest profile, so localStorage refuses the erase, and the
+        native copy, stale again, takes it. Room then appears, and the first launch with room
+        lands the fold before it merges: the native copy's higher eraseGen must still win.
+    In both, two launches show 0 stars and 0 gems with S-0042's guide and Hindi form, and eraseGen
+    is at least 1 in localStorage and in the native copy."""
+    tag = "[%s] erase_with_waiting_fold_and_stale_mirror" % env.mode
+    probs = []
+    for case, fx, drop in (("(a)", load_fixture(SAVES / "retired-account.json", "retired-account on a full phone"), True),
+                           ("(b)", _s7_phone(), False)):
+        fx.fill = True
+        want = _carried(fx)
+        stale = dict(_dict(fx.seed_states.get(GUEST)) or _lowered_stars(fx.seed_states[ACCOUNT_KEY], by=0, coins=0),
+                     eraseGen=0)
+
+        def steps(ph, pr):
+            carry = _Carry(want, pr)
+            ph.seed(fx)
+            ph.NATIVE.prefs[GUEST] = compact(stale)
+            ph.launch("new")
+            if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
+                pr.append("no fold was waiting, so the erase proved nothing")
+                return
+            ph.NATIVE.prefs[GUEST] = compact(stale)      # stale again, whatever the launch wrote
+            ph.NATIVE.drop_next_write = drop
+            why = start_fresh(ph.page)
+            if why:
+                pr.append(why)
+                return
+            ph.page.evaluate(DROP_FILLER_JS)
+            for which in ("the first launch with room", "the launch after it"):
+                ph.launch("new")
+                shown = ph.page.evaluate(SHOWN_JS)
+                if shown["total"] or shown["coins"]:
+                    pr.append("%s shows %s stars and %s gems" % (which, shown["total"], shown["coins"]))
+                    break
+                carry.check("on " + which, "the state in memory", shown)
+            loc, nat = _settled(ph)
+            for where, st in (("localStorage", _parsed(loc)), ("the native copy", _parsed(nat))):
+                if (_num(_dict(st).get("eraseGen")) or 0) < 1:
+                    pr.append("%s has eraseGen %s, not at least 1" % (where, json.dumps(_dict(st).get("eraseGen"))))
+
+        got = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+        probs.extend("%s %s" % (case, p) for p in got)
+    return _rel("N6b", tag, probs,
+                "(a) a stale native copy that lost the erase's write, and (b) a fold that landed after an erase only "
+                "the native copy took, both left 0 stars and 0 gems for two launches, with the guide and Hindi form "
+                "kept and eraseGen at least 1 in both copies")
+
+
+def erase_refused_everywhere(env, sabotage=None, prelude=None):
+    """N6c. The S7 phone, where localStorage refuses the erase, and no native copy takes it either:
+    the web build has none, and in the app the native side refuses every write (its disk is full
+    too). A single lost write is not enough: the erase writes again and reads back. She
+    must be told it failed, never "Progress erased", and nothing changes: once there is room, the
+    fold lands with S-0042's stars, as it would have without the tap."""
+    tag = "[%s] erase_refused_everywhere" % env.mode
+    fx = _s7_phone()
+    worth = len(_starred(fx.seed_states[ACCOUNT_KEY]))
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        if ph.NATIVE is not None:
+            _settled(ph)
+            ph.NATIVE.refuse_writes = True
+        try:
+            ph.page.click("#menuBtn", timeout=3000)
+            ph.page.click("#mProg", timeout=3000)
+            ph.page.click("#progWipe", timeout=3000)
+            ph.page.click("#progWipe", timeout=3000)
+            ph.page.wait_for_function("() => { const w = document.querySelector('#progWarn span');"
+                                      " return !document.getElementById('progWrap') || (w && /Could not erase/.test(w.textContent)); }",
+                                      timeout=8000)
+        except PWTimeout as e:
+            probs.append("Start fresh could not be tapped through (%s)" % _line(str(e), 120))
+            return
+        if not ph.page.evaluate("() => !!document.getElementById('progWrap')"):
+            probs.append("the sheet closed as if the erase had worked, although no copy took it")
+            return
+        if ph.page.evaluate("() => localStorage.getItem('hikmat_current') === null"):
+            probs.append("hikmat_current went although nothing of the erase was stored")
+        if ph.NATIVE is not None:
+            ph.NATIVE.refuse_writes = False
+        ph.page.evaluate(DROP_FILLER_JS)
+        ph.page.evaluate(SAVE_JS)
+        ph.launch("new")
+        have = _starred(_parsed(_local(ph)))
+        if len(have) < worth:
+            probs.append("once there was room the guest profile holds %d of S-0042's %d starred games: the erase "
+                         "she was told had failed took them" % (len(have), worth))
+
+    return _rel("N6c", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "no copy took the erase, so she was told it failed, hikmat_current stayed, and once there was room the "
+                "fold landed with all of S-0042's starred games")
+
+
+def full_storage_native_carries(env, sabotage=None, prelude=None):
+    """N7. S2's phone, full with nothing to drop: localStorage refuses her save, and the native copy
+    takes it. After a relaunch the star is in her state."""
+    tag = "[%s] full_storage_native_carries" % env.mode
+    fx = load_fixture(SAVES / "full-storage.json", "full-storage without caches")
+    fx.with_caches = False
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        r = ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        if r.get("value") is not False:
+            probs.append("save() returned %s, so localStorage was not full and this proved nothing" % json.dumps(r.get("value")))
+        end = time.monotonic() + 3
+        while _learn_star(_parsed(ph.NATIVE.prefs.get(GUEST)), ck, lk) != 3 and time.monotonic() < end:
+            ph.page.wait_for_timeout(100)
+        ph.launch("new")
+        if ph.page.evaluate("([ck, lk]) => getStars(ck, lk, 'learn')", [ck, lk]) != 3:
+            probs.append("after a relaunch the star at %s/%s is not in her state" % (ck, lk))
+
+    return _rel("N7", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "a save the full localStorage refused reached the native copy, and the relaunch brought the star back")
+
+
+def boot_save_cannot_clobber_native(env, sabotage=None, prelude=None):
+    """N8. The WebView still holds S-0042's account and no guest profile, and the native copy holds
+    v7-midway, read slowly. The account fold and a save both run during the read. No native write
+    may come before the read. Native is the base, as localStorage had no guest profile: every
+    star is at least both copies', the settings are native's, and the two copies agree."""
+    tag = "[%s] boot_save_cannot_clobber_native" % env.mode
+    mid = _mid()
+    fx = load_fixture(SAVES / "retired-account.json", "retired-account without a guest profile")
+    del fx.local[GUEST], fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.NATIVE.prefs[GUEST] = mid.local[GUEST]
+        ph.NATIVE.get_delay_ms = 1500
+        ph.launch("new", wait=False)
+        ph.page.wait_for_function("typeof save === 'function' && typeof state === 'object'", timeout=10000)
+        ph.page.evaluate(SAVE_JS)
+        ph.boot()
+        early = ph.NATIVE.writes_before_read(GUEST)
+        if early:
+            probs.append("%d native write(s) to %s before the launch had read it" % (len(early), GUEST))
+        loc, _ = _agree(ph, probs, "after the restore,")
+        for name, ref in (("v7-midway", mid.seed_states[GUEST]), ("S-0042", fx.seed_states[ACCOUNT_KEY])):
+            low = [p for p, v in _starred(ref).items() if guarded(loc or {}).get(p, 0) < v]
+            if low:
+                probs.append("%d of %s's starred games are lower: %s" % (len(low), name, _clip(low, 2)))
+        if _settings(loc) != _settings(mid.seed_states[GUEST]):
+            probs.append("settings are %s, not the native copy's %s" % (json.dumps(_settings(loc)), json.dumps(_settings(mid.seed_states[GUEST]))))
+
+    return _rel("N8", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps),
+                "no native write before the slow read; after it every star is at least both copies', the settings "
+                "are the native copy's, and both copies agree")
+
+
+def boot_save_on_empty_webview(env, sabotage=None, prelude=None):
+    """N9. An empty WebView, the native copy holding v7-midway, read slowly, and a save while it is
+    read. BOOT_STATE is taken before the first write, so the launch knows localStorage was empty,
+    nothing reaches native before the read, and she gets all of v7-midway back, settings included."""
+    tag = "[%s] boot_save_on_empty_webview" % env.mode
+    mid = _mid()
+    seed = mid.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed_local({})
+        ph.NATIVE.prefs[GUEST] = mid.local[GUEST]
+        ph.NATIVE.get_delay_ms = 1500
+        ph.launch("new", wait=False)
+        ph.page.wait_for_function("typeof save === 'function' && typeof state === 'object'", timeout=10000)
+        ph.page.evaluate(SAVE_JS)
+        ph.boot()
+        first = ph.page.evaluate("() => window.__e2eFirstSet")
+        if not first:
+            probs.append("nothing was ever written to localStorage")
+        elif not first.get("bootState"):
+            probs.append("the first localStorage write (%s) came before BOOT_STATE was taken" % first.get("key"))
+        if ph.page.evaluate("() => typeof localWasMissing === 'undefined' ? null : localWasMissing") is not True:
+            probs.append("localWasMissing is not true although localStorage was empty")
+        early = ph.NATIVE.writes_before_read(GUEST)
+        if early:
+            probs.append("%d native write(s) to %s before the launch had read it" % (len(early), GUEST))
+        loc, _ = _agree(ph, probs, "after the restore,")
+        probs.extend(lowered(seed, loc or {}, GUEST) + fields_lost(seed, loc or {}, GUEST))
+        if _settings(loc) != _settings(seed):
+            probs.append("settings are %s, not hers (%s)" % (json.dumps(_settings(loc)), json.dumps(_settings(seed))))
+
+    return _rel("N9", tag, _full_phone_run(env.phone(sabotage=sabotage, prelude=FIRST_SET + (prelude or "")), steps),
+                "BOOT_STATE came before the first write, nothing reached native before the slow read, and the empty "
+                "WebView got all of v7-midway back, settings included")
+
+
+MERGE_JS = r"""(a) => {
+  const c = o => JSON.parse(JSON.stringify(o));
+  const m = { m1: mergeSavedState(c(a), c(a), { sameLearner: true }), m2: mergeSavedState(c(a), c(a)) };
+  if (typeof mergeCopy !== "function") return Object.assign(m, { missing: true });
+  const erased = Object.assign(c(a), { progress: {}, coins: 0, eraseGen: 1 });
+  const old = Object.assign(c(a), { eraseGen: 0 });
+  return {
+    m1: m.m1,
+    m2: m.m2,
+    localWins: mergeCopy(c(erased), c(old), false),
+    otherWins: mergeCopy(c(old), c(erased), false),
+    equal: mergeCopy(Object.assign(c(old), { coins: 1 }), c(old), false),
+  };
+}"""
+
+
+def merge_rules(env, sabotage=None, prelude=None):
+    """M1-M3 and W1, in the page. M1: a learner merged with herself is unchanged. M2: two learners
+    (the account fold) still add their attempts. M3: the higher eraseGen wins outright, either
+    way round, and equal ones merge to the higher values. W1: with no Capacitor at all,
+    nativeRestore resolves false and nothing throws."""
+    tag = "[%s] merge_rules" % env.mode
+    fx = _mid()
+    a = fx.seed_states[GUEST]
+    out = {}
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        out["W1"] = [] if ph.boot_result.get("nativeRestore") is False else [
+            "nativeRestore resolved %s, not false" % json.dumps(ph.boot_result.get("nativeRestore", "(missing)"))]
+        out["r"] = ph.page.evaluate(MERGE_JS, a)
+
+    crash = _full_phone_run(env.phone(sabotage=sabotage, prelude=prelude), steps)
+    r = out.get("r") or {"missing": True}
+    m1 = [] if r.get("m1") == a else ["merged with herself, she changes: " + _clip(diff(a, r.get("m1")), 3)]
+    att = _num(_dict(_dict(a.get("levelTests")).get("1")).get("attempts")) or 0
+    got2 = _num(_dict(_dict(_dict(r.get("m2")).get("levelTests")).get("1")).get("attempts"))
+    m2 = [] if got2 == 2 * att else ["two learners' attempts give %s, not %s" % (got2, 2 * att)]
+    m3 = []
+    if r.get("missing"):
+        m3.append("the build has no mergeCopy")
+    else:
+        if guarded(r["localWins"]).get("coins") != 0 or _dict(r["localWins"]).get("eraseGen") != 1:
+            m3.append("a local erase (eraseGen 1) did not win over an older native copy")
+        if guarded(r["otherWins"]).get("coins") != 0 or _dict(r["otherWins"]).get("eraseGen") != 1:
+            m3.append("a native erase (eraseGen 1) did not win over an older local copy")
+        if guarded(r["equal"]).get("coins") != guarded(a).get("coins"):
+            m3.append("equal eraseGen did not merge to the higher gems")
+    return [(c, not (crash + p), "%s %s %s" % (tag, c, _clip(crash + p, 3) if (crash + p) else g)) for c, p, g in (
+        ("M1", m1, "a learner merged with herself is unchanged"),
+        ("M2", m2, "two learners merged still add their attempts"),
+        ("M3", m3, "the higher eraseGen wins either way round, and equal ones merge to the higher values"),
+        ("W1", out.get("W1", []), "with no Capacitor, nativeRestore resolved false and nothing threw"))]
+
+
+for _name, _fn, _modes in (("mirror_follows_save", mirror_follows_save, ("native",)),
+                           ("first_launch_seeds_mirror", first_launch_seeds_mirror, ("native",)),
+                           ("empty_webview_restored", empty_webview_restored, ("native",)),
+                           ("native_lower_never_wins", native_lower_never_wins, ("native",)),
+                           ("relaunch_does_not_inflate", relaunch_does_not_inflate, ("native",)),
+                           ("erase_stays_erased", erase_stays_erased, ("native",)),
+                           ("erase_with_waiting_fold_and_stale_mirror", erase_with_waiting_fold_and_stale_mirror, ("native",)),
+                           ("erase_refused_everywhere", erase_refused_everywhere, ("web", "native")),
+                           ("full_storage_native_carries", full_storage_native_carries, ("native",)),
+                           ("boot_save_cannot_clobber_native", boot_save_cannot_clobber_native, ("native",)),
+                           ("boot_save_on_empty_webview", boot_save_on_empty_webview, ("native",)),
+                           ("merge_rules", merge_rules, ("web",))):
+    def _t(env, report, _fn=_fn):
+        for _code, ok, msg in _fn(env):
+            report.check(ok, msg)
+    test(_name, modes=_modes)(_t)
+
+
 @test("level_test_promotes")
 def t_level_test_promotes(env, report):
     for _code, ok, msg in level_test_promotes(env):
@@ -2413,7 +2905,7 @@ def t_retire_frees_queue_room(env, report):
         report.check(ok, msg)
 
 
-@test("erase_refused_while_fold_pending")
+@test("erase_refused_while_fold_pending", modes=("native",))
 def t_erase_refused_while_fold_pending(env, report):
     for _code, ok, msg in erase_refused_while_fold_pending(env):
         report.check(ok, msg)
@@ -2506,6 +2998,15 @@ LEVEL_WALL = _sab("lessons above her level are locked again", "var orig=lessonLo
 # the next launch has her back at level 1.
 UNSAVED_PASS = _sab("a level-test pass is never stored", "var real=save;save=function(){var t=state.levelTests;"
                     "state.levelTests={};try{return real.apply(this,arguments);}finally{state.levelTests=t;}};")
+# The mirror gate opens as soon as the page has run, before the launch has read the native copy,
+# so a boot save can overwrite the only copy of her progress before it is read.
+EARLY_GATE = _sab("the mirror opens before the native copy is read", "_mirrorOpen=true;_mirrorPump();")
+# The launch merge ignores eraseGen: an erased copy and an older one just merge to the higher
+# values, so a stale copy, or a fold that lands after the erase, brings every erased star back.
+ERASEGEN_IGNORED = _sab("the launch merge ignores eraseGen", "mergeCopy=function(l,o,m){if(!o)return l;"
+                        "var c=JSON.parse(JSON.stringify(m?o:l));return mergeSavedState(c,m?l:o,{sameLearner:true});};")
+# The native copy simply replaces hers: an older native copy lowers her stars and gems.
+NATIVE_REPLACES = _sab("the native copy replaces hers", "mergeCopy=function(l,o){return o?JSON.parse(JSON.stringify(o)):l;};")
 # dropContentCaches() takes the settings cache too, which is not one of the three it may drop.
 DROP_SETTINGS_TOO = _sab("making room also drops the settings cache",
                          "var real=dropContentCaches;dropContentCaches=function(){real();"
@@ -2653,12 +3154,23 @@ def t_self_test(env, report):
            ["S5"], [("S5", "not %s and %s, which only hikmat_current held" % (carried["gender"], carried["mascot"]))])
     judged("an account fold tried before the unsendable queues are gone", retire_frees_queue_room(env, prelude=LATE_QUEUE_DROP),
            ["S6"], [("S6", "hikmat_current is still there")])
+    # S7 and the native copy's checks need a phone with the app's native side. The self-test runs
+    # once, in the first mode, so it brings its own.
+    nenv = env if env.mode == "native" else Env(env.browser, env.base, "native", env.old_ref, env.old_html, env.new_html)
     judged("Start fresh that removes hikmat_current whether or not its save lands",
-           erase_refused_while_fold_pending(env, sabotage=FOLD_GOES_FIRST),
+           erase_refused_while_fold_pending(nenv, sabotage=FOLD_GOES_FIRST),
            ["S7"], [("S7", "hikmat_current went although localStorage refused the erase")])
     judged("a waiting fold that only Start fresh's own save can end",
-           erase_refused_while_fold_pending(env, sabotage=FOLD_ENDS_WITH_ERASE_ONLY),
+           erase_refused_while_fold_pending(nenv, sabotage=FOLD_ENDS_WITH_ERASE_ONLY),
            ["S7"], [("S7", "hikmat_current is still there after her next save")])
+    judged("a mirror that opens before the native copy is read", boot_save_on_empty_webview(nenv, sabotage=EARLY_GATE),
+           ["N9"], [("N9", "before the launch had read it")])
+    judged("a launch merge that ignores eraseGen", erase_with_waiting_fold_and_stale_mirror(nenv, sabotage=ERASEGEN_IGNORED),
+           ["N6b"], [("N6b", "stars and")])
+    judged("Start fresh that leaves a waiting fold in place, with a stale native copy",
+           erase_with_waiting_fold_and_stale_mirror(nenv, sabotage=KEEP_WAITING_FOLD), ["N6b"], [("N6b", "(a)")])
+    judged("a native copy that replaces hers", native_lower_never_wins(nenv, sabotage=NATIVE_REPLACES),
+           ["N4"], [("N4", "coins")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------
