@@ -3944,7 +3944,179 @@ function openLevelSheet(){
   if(go) go.onclick = () => { sfx.enter(); close(); renderTestIntro(cur, rerender); };
   srSay(title + ". " + body); try { speak(body, state.lang, {}); } catch(e){}
 }
-function openProgressSheet(){
+// ---------- Save my progress / Bring my progress (rule 7) ----------
+// Her progress as one small file she can keep on WhatsApp, Bluetooth or Files, and bring back in
+// on this phone or a new one. The file holds ONE learner, the profile on screen, and nothing that
+// names her: it travels through family phones and group chats, so neither its contents nor its
+// file name may say who she is. Bringing a file in asks first, keeps the higher of every value
+// (rule 2), takes the file's settings only for a learner with no progress yet (D5), and never
+// takes its eraseGen: bringing a file in is her own choice, not a copy the launch merge weighs.
+const PROGRESS_FILE_MAX = 2 * 1024 * 1024;
+const SETTING_FIELDS = ["lang", "theme", "sound", "gender", "mascot", "prefsTouched"];
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+function starsIn(st){
+  let t = 0; const p = (st && st.progress) || {};
+  for(const c in p) for(const l in p[c]) for(const a in p[c][l]) t += p[c][l][a] || 0;
+  return t;
+}
+function progressFileName(){
+  const d = new Date(), z = n => String(n).padStart(2, "0");
+  return "bodhya-progress-" + d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + ".json";
+}
+function progressFileText(st){
+  return JSON.stringify({ kind:"bodhya-progress", v:1, app:"net.bodhya.learn", savedAt:new Date().toISOString(), state:st });
+}
+function _isObj(x){ return !!x && typeof x === "object" && !Array.isArray(x); }
+// A file is not trusted: only plain keys of a sane length, never the ones that reach a prototype.
+function _safeKeys(o){ return _isObj(o) ? Object.keys(o).filter(k => k.length > 0 && k.length <= 140 && !UNSAFE_KEYS.has(k)) : []; }
+function _int(x, lo, hi){ return typeof x === "number" && isFinite(x) ? Math.min(hi, Math.max(lo, Math.round(x))) : null; }
+// Only the fields the game knows, each in the shape it expects; anything else is left behind.
+// A setting the file does not hold validly is absent, so D5 can never apply a default as hers.
+function cleanImportedState(o){
+  const out = { progress:{}, coins:0, testSeen:{}, levelTests:{}, videosSeen:{}, seenTypes:{}, lastLoc:{} };
+  if(!_isObj(o)) return out;
+  for(const ck of _safeKeys(o.progress)) for(const lk of _safeKeys(o.progress[ck])) for(const aid of _safeKeys(o.progress[ck][lk])){
+    const s = _int(o.progress[ck][lk][aid], 0, 3);
+    if(s === null) continue;
+    const c = out.progress[ck] || (out.progress[ck] = {});
+    (c[lk] || (c[lk] = {}))[aid] = s;
+  }
+  out.coins = _int(o.coins, 0, 10000000) || 0;
+  for(const n of _safeKeys(o.levelTests)){
+    const t = o.levelTests[n];
+    if(_isObj(t)) out.levelTests[n] = { passed: t.passed === true, bestPct: _int(t.bestPct, 0, 100) || 0,
+                                        attempts: _int(t.attempts, 0, 1000000) || 0 };
+  }
+  for(const k of _safeKeys(o.testSeen)){
+    const a = o.testSeen[k];
+    if(Array.isArray(a)) out.testSeen[k] = a.filter(x => typeof x === "string" && x.length <= 140).slice(0, 5000);
+  }
+  for(const f of ["videosSeen", "seenTypes"]) for(const k of _safeKeys(o[f])) if(o[f][k]) out[f][k] = 1;
+  for(const m of _safeKeys(o.lastLoc)){
+    const v = o.lastLoc[m];
+    if(_isObj(v) && typeof v.ck === "string" && typeof v.lk === "string" && v.ck.length <= 140 && v.lk.length <= 140)
+      out.lastLoc[m] = { ck: v.ck, lk: v.lk };
+  }
+  if(typeof o.lastMode === "string" && o.lastMode.length <= 40) out.lastMode = o.lastMode;
+  if(o.lang === "en" || o.lang === "hi") out.lang = o.lang;
+  if(o.theme === "light" || o.theme === "dark") out.theme = o.theme;
+  if(typeof o.sound === "boolean") out.sound = o.sound;
+  if(o.gender === "Female" || o.gender === "Male" || o.gender === "Other") out.gender = o.gender;
+  if(typeof o.mascot === "string" && Object.prototype.hasOwnProperty.call(MASCOT_BY_ID, o.mascot)) out.mascot = o.mascot;
+  if(typeof o.prefsTouched === "boolean") out.prefsTouched = o.prefsTouched;
+  return out;
+}
+// {state} for a Bodhya progress file of any version, or {error}. Not ours: anything that is not
+// JSON, or not an object with kind "bodhya-progress", a version from 1 and a state object.
+function readProgressFile(text){
+  let doc;
+  try { doc = JSON.parse(String(text).replace(/^﻿/, "")); } catch(e){ return { error:"notjson" }; }
+  if(!_isObj(doc) || doc.kind !== "bodhya-progress" || !(typeof doc.v === "number" && doc.v >= 1) || !_isObj(doc.state))
+    return { error:"notours" };
+  return { state: cleanImportedState(doc.state) };
+}
+function hasProgress(st){
+  if(starsIn(st) > 0 || (st.coins || 0) > 0) return true;
+  const t = st.levelTests || {};
+  for(const n in t) if(t[n] && t[n].passed) return true;
+  return false;
+}
+// Her state with a cleaned file brought in. Her eraseGen stays: cleanImportedState never reads one.
+function mergeBrought(cur, clean){
+  const next = mergeSavedState(JSON.parse(JSON.stringify(cur)), clean, { sameLearner:true });
+  if(!hasProgress(cur)) for(const f of SETTING_FIELDS) if(clean[f] !== undefined) next[f] = clean[f];
+  return next;
+}
+// "saved", "cancelled" (she closed the share sheet) or "failed".
+async function saveProgressFile(){
+  const name = progressFileName(), text = progressFileText(state);
+  const title = tx("My Bodhya progress","मेरी बोध्या प्रगति");
+  const F = capPlugin("Filesystem"), S = capPlugin("Share");
+  if(F && S && typeof F.writeFile === "function" && typeof S.share === "function"){
+    let uri;
+    try { uri = (await F.writeFile({ path:name, data:text, directory:"CACHE", encoding:"utf8" })).uri; }
+    catch(e){ return "failed"; }
+    try { await S.share({ title, files:[uri] }); return "saved"; }
+    catch(e){ return /cancel/i.test(String((e && e.message) || e)) ? "cancelled" : "failed"; }
+  }
+  let file = null;
+  try { file = new File([text], name, { type:"application/json" }); } catch(e){}
+  let canShare = false;
+  try { canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({ files:[file] })); } catch(e){}
+  if(canShare){
+    try { await navigator.share({ title, files:[file] }); return "saved"; }
+    catch(e){ if(e && e.name === "AbortError") return "cancelled"; }
+  }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type:"application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return "saved";
+  } catch(e){ return "failed"; }
+}
+// The confirm sheet: how many stars the file holds, then Bring it in or Not now. Resolves true on yes.
+function askBring(stars){
+  return new Promise(resolve => {
+    const ex = document.getElementById("bringWrap"); if(ex) ex.remove();
+    const title = tx("Bring in this progress?","यह प्रगति वापस लानी है?");
+    const body = tx("This file has " + stars + " stars. You keep the best of this file and this phone.",
+                    "इस फ़ाइल में " + stars + " सितारे हैं। फ़ाइल और इस फ़ोन में से जो बेहतर है, वही रहेगा।");
+    const yes = tx("Bring it in","वापस लाओ"), no = tx("Not now","अभी नहीं");
+    const hear = tx(title + " " + body + " " + yes + ": the stars come in. " + no + ": nothing changes.",
+                    title + " " + body + " " + yes + ": सितारे आ जाएँगे। " + no + ": कुछ नहीं बदलेगा।");
+    const w = el(`<div class="sheetwrap" id="bringWrap">
+      <div class="sheet settingsheet" role="dialog" aria-modal="true" aria-label="${escAttr(title)}">
+        <div class="doubthead">
+          <div class="doubttitle"><div class="doubtq">${esc(title)}</div><div class="doubtsub">${esc(body)}</div></div>
+          <button class="speakchip" id="bringSay" style="width:48px; height:48px; flex:0 0 auto" aria-label="${escAttr(tx("Hear it","सुनो"))}" title="${escAttr(tx("Hear it","सुनो"))}">🔊</button>
+        </div>
+        <button class="btn primary wide" id="bringYes" style="min-height:48px">${esc(yes)}</button>
+        <button class="btn ghost wide" id="bringNo" style="min-height:48px; margin-top:10px">${esc(no)}</button>
+      </div>
+    </div>`);
+    document.body.appendChild(w);
+    let done = false;
+    const end = ok => { if(done) return; done = true; stopSpeech(); w.remove(); resolve(ok); };
+    w.querySelector("#bringYes").onclick = () => { sfx.tap(); end(true); };
+    w.querySelector("#bringNo").onclick = () => { sfx.back(); end(false); };
+    w.querySelector("#bringSay").onclick = () => speak(hear, state.lang === "hi" ? "hi" : "en");
+    w.onclick = e => { if(e.target === w){ sfx.back(); end(false); } };
+    srSay(title);
+  });
+}
+// File.text() is Chrome 76; the game runs from WebView 60, which phones that never update still have.
+function readFileText(file){
+  if(typeof file.text === "function") return file.text();
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error);
+    r.readAsText(file);
+  });
+}
+// {ok, stars} once the file is in her state and kept; otherwise {ok:false, error}, and nothing
+// changed: "toobig", "notjson", "notours", "declined", or "notsaved" when neither copy took it.
+async function bringProgressFile(file){
+  if(!file) return { ok:false, error:"notours" };
+  if(file.size > PROGRESS_FILE_MAX) return { ok:false, error:"toobig" };
+  let text;
+  try { text = await readFileText(file); } catch(e){ return { ok:false, error:"notjson" }; }
+  const r = readProgressFile(text);
+  if(r.error) return { ok:false, error:r.error };
+  if(!(await askBring(starsIn(r.state)))) return { ok:false, error:"declined" };
+  const before = state, foldWaited = endFoldWhenKept;
+  state = mergeBrought(state, r.state);
+  const kept = save();
+  const mirrored = await Promise.race([mirrorNow(stateKey(), JSON.stringify(state)),
+                                       new Promise(res => setTimeout(() => res(false), 5000))]);
+  if(!kept && !mirrored){ state = before; endFoldWhenKept = foldWaited; return { ok:false, error:"notsaved" }; }
+  try { refreshTop(); } catch(e){}
+  try { rerender(); } catch(e){}
+  return { ok:true, stars: totalStars() };
+}
+
+function openProgressSheet(note){
   const _ex = document.getElementById("progWrap"); if(_ex) _ex.remove();
   sfx.tap(); stopSpeech();
   let done = 0;
@@ -3969,7 +4141,12 @@ function openProgressSheet(){
         <div class="savechip">💎 ${esc(tx(gems+" gems", gems+" रत्न"))}</div>
         <div class="savechip">🏆 ${esc(studentLevel() > 5 ? tx("All levels passed","सभी स्तर पास") : levelTitle(shownLevel()))}</div>
       </div>
-      <div class="teachbox" id="progWarn" style="display:none">💡 <span></span></div>
+      <div class="teachbox" id="progWarn" style="display:none" aria-live="polite">💡 <span></span></div>
+      <button class="btn ghost wide" id="progSave" style="min-height:48px; margin-bottom:10px">💾 ${esc(tx("Save my progress","अपनी प्रगति सहेजो"))}
+        <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(tx("A small file to keep on WhatsApp, Bluetooth or Files","एक छोटी फ़ाइल, जिसे WhatsApp, ब्लूटूथ या Files में रखा जा सकता है"))}</small></button>
+      <button class="btn ghost wide" id="progBring" style="min-height:48px; margin-bottom:10px">📂 ${esc(tx("Bring my progress","अपनी प्रगति वापस लाओ"))}
+        <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(tx("Nothing you have now is lost","अभी का कुछ भी नहीं मिटेगा"))}</small></button>
+      <input type="file" id="progFile" hidden>
       <button class="btn danger wide" id="progWipe">${tx("Start fresh","नए सिरे से शुरू करो")}</button>
       <button class="btn ghost wide" id="dClose">${tx("Close","बंद करो")}</button>
     </div>
@@ -3978,17 +4155,20 @@ function openProgressSheet(){
   const close = () => sheet.remove();
   const wipe = sheet.querySelector("#progWipe");
   const warn = sheet.querySelector("#progWarn");
-  let armed = false, erasing = false;
+  // Every message in this sheet goes through here; data-msg says which one it is, in any language.
+  const say = (msg, text) => {
+    warn.style.display = "block"; warn.dataset.msg = msg;
+    warn.querySelector("span").textContent = text; srSay(text);
+  };
+  const unsay = () => { warn.style.display = "none"; warn.dataset.msg = ""; };
+  let armed = false, erasing = false, filing = false;
   wipe.onclick = async () => {
     if(erasing) return;
     if(!armed){
       armed = true; sfx.tap();
-      warn.style.display = "block";
-      warn.querySelector("span").textContent =
-        tx("This erases every star and gem on this phone. It cannot be undone.",
-           "इससे इस फ़ोन के सारे सितारे और रत्न मिट जाएँगे। यह वापस नहीं आएगा।");
+      say("erasewarn", tx("This erases every star and gem on this phone. It cannot be undone.",
+                          "इससे इस फ़ोन के सारे सितारे और रत्न मिट जाएँगे। यह वापस नहीं आएगा।"));
       wipe.textContent = tx("Yes, erase everything","हाँ, सब कुछ मिटा दो");
-      srSay(warn.querySelector("span").textContent);
       return;
     }
     // Her settings are not her progress. Language, sound, theme, guide and the way Hindi
@@ -4016,19 +4196,49 @@ function openProgressSheet(){
       // it was, and she is told so.
       state = before; endFoldWhenKept = foldWaitedBefore;
       erasing = false;
-      const m = tx("Could not erase. Try again.","मिटाया नहीं जा सका। फिर से कोशिश करो।");
-      warn.style.display = "block";
-      warn.querySelector("span").textContent = m;
-      srSay(m);
+      say("erasefail", tx("Could not erase. Try again.","मिटाया नहीं जा सका। फिर से कोशिश करो।"));
       return;
     }
     sfx.back(); close(); renderHome();
     srSay(tx("Progress erased.","प्रगति मिटा दी गई।"));
   };
+  sheet.querySelector("#progSave").onclick = async () => {
+    if(filing || erasing) return;
+    filing = true; sfx.tap(); unsay();
+    const r = await saveProgressFile();
+    filing = false;
+    if(r === "saved") say("saved", tx("File saved. Keep it safe.","फ़ाइल सहेज ली गई। इसे संभालकर रखो।"));
+    else if(r === "failed") say("savefail", tx("Could not save the file. Try again.","फ़ाइल सहेजी नहीं जा सकी। फिर से कोशिश करो।"));
+  };
+  const fileIn = sheet.querySelector("#progFile");
+  sheet.querySelector("#progBring").onclick = () => {
+    if(filing || erasing) return;
+    sfx.tap(); unsay();
+    fileIn.value = "";
+    fileIn.click();
+  };
+  fileIn.onchange = async () => {
+    const f = fileIn.files && fileIn.files[0];
+    if(!f || filing) return;
+    filing = true;
+    const r = await bringProgressFile(f);
+    filing = false;
+    if(r.ok){
+      // Her language, theme or numbers may all have changed: draw the sheet again from them.
+      close();
+      openProgressSheet({ msg:"brought", text: tx("Progress brought back: " + r.stars + " stars",
+                                                  "प्रगति वापस आ गई: " + r.stars + " सितारे") });
+      return;
+    }
+    if(r.error === "declined") return;
+    if(r.error === "notsaved") say("bringfail", tx("Could not bring it in. Try again.","वापस नहीं लाया जा सका। फिर से कोशिश करो।"));
+    else say("notours", tx("This is not a Bodhya progress file.","यह बोध्या की प्रगति वाली फ़ाइल नहीं है।"));
+  };
   sheet.querySelector("#dClose").onclick = () => { sfx.back(); close(); };
   sheet.querySelector("[data-x]").onclick = () => { sfx.back(); close(); };
   sheet.onclick = (e) => { if(e.target === sheet) close(); };
   srSay(title);
+  if(note) say(note.msg, note.text);
 }
 
 // Who is playing — rendered as menu rows. This used to be a chip bolted onto Home and the class

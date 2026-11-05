@@ -2844,6 +2844,491 @@ for _name, _fn, _modes in (("mirror_follows_save", mirror_follows_save, ("native
     test(_name, modes=_modes)(_t)
 
 
+# ---------------------------------------------------------------- Task 5: her progress as a file -
+# Rule 7: Save my progress hands her one small file, and Bring my progress takes one back in. The
+# file holds one learner and no name. Bringing asks first, says how many stars the file holds,
+# refuses anything that is not ours, and never lowers a thing (rule 2). Settings come from the
+# file only for a learner with no progress yet (D5), and its eraseGen is ignored.
+
+FILE_NAME_RX = re.compile(r"^bodhya-progress-\d{4}-\d{2}-\d{2}\.json$")
+ENVELOPE_KEYS = {"kind", "v", "app", "savedAt", "state"}
+# Without Web Share, the web build's Save is a download, which the harness can read.
+NO_WEB_SHARE = ("/* e2e: no Web Share */(function(){try{Object.defineProperty(Navigator.prototype,'canShare',"
+                "{value:function(){return false;},configurable:true});}catch(e){}})();")
+# Web Share that keeps what it was handed, for F2 on the web.
+KEEP_WEB_SHARE = ("/* e2e: Web Share that keeps the file */(function(){window.__e2eShared=null;"
+                  "Object.defineProperty(Navigator.prototype,'canShare',{value:function(d){return !!(d&&d.files);},configurable:true});"
+                  "Object.defineProperty(Navigator.prototype,'share',{value:function(d){var f=d.files[0];"
+                  "return f.text().then(function(t){window.__e2eShared={name:f.name,type:f.type,text:t};});},configurable:true});})();")
+WARN_JS = r"""() => { const w = document.getElementById("progWarn");
+  return w && w.style.display !== "none" ? { msg: w.dataset.msg || "", text: w.innerText } : null; }"""
+
+
+def _file_phone(env, sabotage=None, prelude=None, share=NO_WEB_SHARE):
+    ph = env.phone(sabotage=sabotage, prelude=prelude)
+    if ph.NATIVE is None and share:
+        ph.ctx.add_init_script(share)
+    return ph
+
+
+def _envelope(st):
+    return {"kind": "bodhya-progress", "v": 1, "app": APP_ID, "savedAt": SAVED_AT, "state": st}
+
+
+def _stars_in(st):
+    return sum(_num(v) or 0 for ls in _dict(_dict(st).get("progress")).values()
+               for g in _dict(ls).values() for v in _dict(g).values())
+
+
+def _open_progress(page):
+    if page.query_selector("#progWrap"):
+        return
+    page.click("#menuBtn", timeout=3000)
+    page.click("#mProg", timeout=3000)
+    page.wait_for_selector("#progWrap", timeout=3000)
+
+
+def _save_file(ph):
+    """Save my progress as she does it. Returns (file name, file text). On the web it is the
+    download; in the app, the file that went to Filesystem.writeFile and then to Share."""
+    _open_progress(ph.page)
+    if ph.NATIVE is None:
+        with ph.page.expect_download(timeout=5000) as dl:
+            ph.page.click("#progSave", timeout=3000)
+        d = dl.value
+        with open(d.path(), encoding="utf-8") as f:
+            return d.suggested_filename, f.read()
+    n0 = len(ph.NATIVE.shares)
+    ph.page.click("#progSave", timeout=3000)
+    end = time.monotonic() + 5
+    while len(ph.NATIVE.shares) == n0 and time.monotonic() < end:
+        ph.page.wait_for_timeout(100)
+    if len(ph.NATIVE.shares) == n0:
+        raise FlowError("Save my progress never reached Share.share", ph.errors, False)
+    uri = (ph.NATIVE.shares[-1].get("files") or [""])[0]
+    f = next((x for x in ph.NATIVE.files.values() if x["uri"] == uri), None)
+    if f is None:
+        raise FlowError("Share.share got %s, which Filesystem.writeFile never wrote" % uri, ph.errors, False)
+    return f["path"], f["data"]
+
+
+def _bring(ph, data, name="bodhya-progress-2026-11-05.json", mime="application/json", answer="yes"):
+    """Bring my progress as she does it: the button, the picker, the file, then her answer.
+    Returns (what the confirm sheet said or None, the message the progress sheet then shows)."""
+    _open_progress(ph.page)
+    with ph.page.expect_file_chooser(timeout=3000) as fc:
+        ph.page.click("#progBring", timeout=3000)
+    buf = data if isinstance(data, bytes) else data.encode("utf-8")
+    fc.value.set_files(files=[{"name": name, "mimeType": mime, "buffer": buf}])
+    ph.page.wait_for_function("() => !!document.getElementById('bringWrap') || !!(%s)()" % WARN_JS, timeout=8000)
+    asked = ph.page.evaluate("() => { const w = document.getElementById('bringWrap'); return w ? w.innerText : null; }")
+    if asked is not None and answer:
+        ph.page.click("#bringYes" if answer == "yes" else "#bringNo", timeout=3000)
+        ph.page.wait_for_selector("#bringWrap", state="detached", timeout=8000)
+        if answer == "yes":
+            ph.page.wait_for_function("() => !!(%s)()" % WARN_JS, timeout=8000)
+    return asked, ph.page.evaluate(WARN_JS)
+
+
+def _post_erase():
+    fx = load_fixture(SAVES / "post-erase.json", "post-erase")
+    return fx, fx.seed_states[GUEST]
+
+
+def _raised(st, ck, lk):
+    """st with one more played lesson: three stars on `learn` at ck/lk."""
+    out = json.loads(compact(st))
+    out.setdefault("progress", {}).setdefault(ck, {}).setdefault(lk, {})["learn"] = 3
+    return out
+
+
+def save_bring_round_trip(env, sabotage=None, prelude=None):
+    """F1. Save on one phone, bring the file onto another with nothing played: the file's state is
+    hers exactly, the confirm sheet says its stars, and the second phone ends up as the first.
+    F1b. The file holds one learner and no name, on the phone where S-0042's account was retired."""
+    tag = "[%s] save_bring_round_trip" % env.mode
+    fx = _mid()
+    out = {"F1": [], "F1b": []}
+    got = {}
+
+    def first(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        name, text = _save_file(ph)
+        got.update(name=name, text=text, local=_parsed(_local(ph)))
+
+    out["F1"] += _full_phone_run(_file_phone(env, sabotage, prelude), first)
+    if "text" in got:
+        doc = json.loads(got["text"])
+        if _dict(doc).get("state") != got["local"]:
+            out["F1"].append("the file's state is not hers: %s" % _clip(diff(got["local"], _dict(doc).get("state"), values=False), 3))
+        empty, _ = _post_erase()
+
+        def second(ph, probs):
+            ph.seed(empty)
+            ph.launch("new")
+            asked, said = _bring(ph, got["text"], name=got["name"])
+            want = _stars_in(doc["state"])
+            if asked is None:
+                probs.append("the confirm sheet never came (%s)" % (said or {}).get("msg"))
+                return
+            if not re.search(r"(^|\D)%d(\D|$)" % want, asked):
+                probs.append("the confirm sheet does not say the file's %d stars: %r" % (want, _line(asked, 120)))
+            if (said or {}).get("msg") != "brought":
+                probs.append("after yes the sheet said %r, not that it was brought back" % (said,))
+            now = _parsed(_local(ph))
+            ch = changed_numbers(got["local"], now or {})
+            if ch:
+                probs.append("the second phone differs from the first: %s" % _clip(["%s %s -> %s" % (p, a, b) for p, (a, b) in sorted(ch.items())], 3))
+            if _settings(now) != _settings(got["local"]):
+                probs.append("the second phone, with no progress, kept settings %s, not the file's %s" % (_settings(now), _settings(got["local"])))
+
+        out["F1"] += _full_phone_run(_file_phone(env, sabotage, prelude), second)
+
+    retired = load_fixture(SAVES / "retired-account.json", "retired-account")
+    held = {}
+
+    def third(ph, probs):
+        ph.seed(retired)
+        ph.launch("new")
+        name, text = _save_file(ph)
+        held.update(name=name, text=text, local=_parsed(_local(ph)))
+
+    out["F1b"] += _full_phone_run(_file_phone(env, sabotage, prelude), third)
+    if "text" in held:
+        if not FILE_NAME_RX.match(held["name"] or ""):
+            out["F1b"].append("the file is called %r" % held["name"])
+        try:
+            doc = json.loads(held["text"])
+        except ValueError:
+            doc = None
+        if not isinstance(doc, dict) or set(doc) != ENVELOPE_KEYS:
+            out["F1b"].append("the file's keys are %s, not the envelope's" % (sorted(doc) if isinstance(doc, dict) else type(doc).__name__))
+        else:
+            if (doc["kind"], doc["v"], doc["app"]) != ("bodhya-progress", 1, APP_ID):
+                out["F1b"].append("the envelope says %r" % ((doc["kind"], doc["v"], doc["app"]),))
+            if doc["state"] != held["local"]:
+                out["F1b"].append("the file's state is not the guest profile on screen")
+        for bad in ("S-0042", "Test Learner", "hikmat_"):
+            if bad in held["text"]:
+                out["F1b"].append("the file holds %r" % bad)
+    return [(c, not p, "%s %s %s" % (tag, c, _clip(p, 4) if p else g)) for c, p, g in (
+        ("F1", out["F1"], "the file is her state exactly, the confirm sheet said its stars, and the phone with nothing "
+                          "played became her, settings included"),
+        ("F1b", out["F1b"], "the file is the envelope with one learner in it, no name, no id, no other profile, "
+                            "and a name with only the date in it"))]
+
+
+def save_hands_over_file(env, sabotage=None, prelude=None):
+    """F2. In the app, Save writes the file to the cache directory and hands that file to Share; a
+    share she cancels is not reported as saved. On the web with Web Share, the shared file is the
+    same envelope under the same name."""
+    tag = "[%s] save_hands_over_file" % env.mode
+    fx = _mid()
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        _open_progress(ph.page)
+        if ph.NATIVE is None:
+            ph.page.click("#progSave", timeout=3000)
+            ph.page.wait_for_function("() => !!window.__e2eShared", timeout=5000)
+            sh = ph.page.evaluate("() => window.__e2eShared")
+            if not FILE_NAME_RX.match(sh["name"] or ""):
+                probs.append("Web Share got a file called %r" % sh["name"])
+            if _dict(json.loads(sh["text"])).get("state") != _parsed(_local(ph)):
+                probs.append("Web Share got a file whose state is not hers")
+        else:
+            name, text = _save_file(ph)
+            f = ph.NATIVE.files.get(name, {})
+            if f.get("directory") != "CACHE" or not FILE_NAME_RX.match(name):
+                probs.append("writeFile wrote %r to %r" % (name, f.get("directory")))
+            if _dict(json.loads(text)).get("state") != _parsed(_local(ph)):
+                probs.append("the shared file's state is not hers")
+            ph.page.wait_for_function("() => !!(%s)()" % WARN_JS, timeout=5000)
+            if (ph.page.evaluate(WARN_JS) or {}).get("msg") != "saved":
+                probs.append("after the share the sheet said %r, not that the file was saved" % (ph.page.evaluate(WARN_JS),))
+            ph.page.evaluate("() => { const w = document.getElementById('progWarn'); w.style.display = 'none'; w.dataset.msg = ''; }")
+            ph.NATIVE.cancel_next_share = True
+            n0 = len(ph.NATIVE.log)
+            ph.page.click("#progSave", timeout=3000)
+            end = time.monotonic() + 5
+            while not any(e.get("op") == "share" and e.get("canceled") for e in ph.NATIVE.log[n0:]) and time.monotonic() < end:
+                ph.page.wait_for_timeout(100)
+            ph.page.wait_for_timeout(500)
+            w = ph.page.evaluate(WARN_JS)
+            if w and w.get("msg") == "saved":
+                probs.append("a share she cancelled was reported as saved")
+
+    good = ("the file went to the cache directory, then to Share; a cancelled share was not called saved"
+            if env.mode == "native" else "Web Share got her envelope under the dated name")
+    return _rel("F2", tag, _full_phone_run(_file_phone(env, sabotage, prelude, share=KEEP_WEB_SHARE), steps), good)
+
+
+def bring_asks_and_follows_d5(env, sabotage=None, prelude=None):
+    """F1c. Not now changes nothing, in either copy. F1d. On a phone with progress the file's
+    settings are not taken; on one with none they are. The file's eraseGen 7 is ignored in both."""
+    tag = "[%s] bring_asks_and_follows_d5" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+    (ck, lk), = _fresh_lessons(fx, 1)
+    other = dict(_raised(seed, ck, lk), lang="en", theme="light", sound=False, gender="Male", mascot="kabir", eraseGen=7)
+    text = compact(_envelope(other))
+    out = {"F1c": [], "F1d": []}
+
+    def ask(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        if ph.NATIVE is not None:
+            _settled(ph)
+        before, nat0 = _local(ph), (ph.NATIVE.prefs.get(GUEST) if ph.NATIVE else None)
+        asked, said = _bring(ph, text, answer="no")
+        if asked is None:
+            probs.append("it merged without asking (%s)" % ((said or {}).get("msg"),))
+            return
+        if not re.search(r"(^|\D)%d(\D|$)" % _stars_in(other), asked):
+            probs.append("the confirm sheet does not say the file's %d stars" % _stars_in(other))
+        ph.page.wait_for_timeout(600)
+        if _local(ph) != before:
+            probs.append("Not now changed localStorage: %s" % _clip(diff(_parsed(before), _parsed(_local(ph)), values=False), 3))
+        if ph.NATIVE is not None and ph.NATIVE.prefs.get(GUEST) != nat0:
+            probs.append("Not now changed the native copy")
+
+    out["F1c"] += _full_phone_run(_file_phone(env, sabotage, prelude), ask)
+
+    def has_progress(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        asked, said = _bring(ph, text)
+        now = _parsed(_local(ph))
+        if _learn_star(now, ck, lk) != 3:   # whether it asked first is F1c's to judge
+            probs.append("with progress: the file's new lesson did not come in (%s)" % ((said or {}).get("msg"),))
+        if _settings(now) != _settings(seed):
+            probs.append("with progress: her settings became %s" % _settings(now))
+        if _dict(now).get("eraseGen", 0) != _dict(seed).get("eraseGen", 0):
+            probs.append("with progress: eraseGen became %s, the file's" % _dict(now).get("eraseGen"))
+
+    def no_progress(ph, probs):
+        empty, est = _post_erase()
+        ph.seed(empty)
+        ph.launch("new")
+        asked, said = _bring(ph, text)
+        now = _parsed(_local(ph))
+        if _learn_star(now, ck, lk) != 3:
+            probs.append("with no progress: the file did not come in (%s)" % ((said or {}).get("msg"),))
+        if _settings(now) != _settings(other):
+            probs.append("with no progress: settings are %s, not the file's %s" % (_settings(now), _settings(other)))
+        if _dict(now).get("eraseGen", 0) != _dict(est).get("eraseGen", 0):
+            probs.append("with no progress: eraseGen became %s, the file's" % _dict(now).get("eraseGen"))
+
+    out["F1d"] += _full_phone_run(_file_phone(env, sabotage, prelude), has_progress)
+    out["F1d"] += _full_phone_run(_file_phone(env, sabotage, prelude), no_progress)
+    return [(c, not p, "%s %s %s" % (tag, c, _clip(p, 4) if p else g)) for c, p, g in (
+        ("F1c", out["F1c"], "the confirm sheet said the file's stars, and Not now left both copies as they were"),
+        ("F1d", out["F1d"], "her settings stayed on a phone with progress, the file's came on one with none, "
+                            "and the file's eraseGen 7 was ignored on both"))]
+
+
+def bring_never_lowers(env, sabotage=None, prelude=None):
+    """F3. A file with fewer stars and gems lowers nothing. Her own file, brought twice, changes
+    nothing the second time: attempts, gems and seen-lists do not add up."""
+    tag = "[%s] bring_never_lowers" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        _bring(ph, compact(_envelope(_lowered_stars(seed))))
+        probs.extend(sorted(lowered(seed, _parsed(_local(ph)), GUEST), key=lambda x: " coins " not in x))
+        if probs:
+            return
+        own = compact(_envelope(seed))
+        _bring(ph, own)
+        once = _parsed(_local(ph))
+        _bring(ph, own)
+        twice = _parsed(_local(ph))
+        ch = changed_numbers(once, twice)
+        if ch or once != twice:
+            probs.append("her own file, brought a second time, changed %s" % _clip(
+                ["%s %s -> %s" % (p, a, b) for p, (a, b) in sorted(ch.items())] or diff(once, twice, values=False), 3))
+        if ph.NATIVE is not None:
+            _agree(ph, probs, "after bringing,")
+
+    return _rel("F3", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "an older file lowered no star or gem, and her own file brought twice changed nothing")
+
+
+EVIL_STATE = r"""{"__proto__":{"polluted":"state"},"constructor":{"prototype":{"polluted":"ctor"}},
+ "progress":{"__proto__":{"polluted":"progress"},"eng-foundation":{"l01":{"learn":99,"listen":-1,"sounds":"3",
+   "rhyme":2.6,"__proto__":3,"PAD":3}},"e2e-new":{"l01":{"learn":"NaN","listen":1e309}}},
+ "coins":1e12,"levelTests":{"1":{"passed":"yes","bestPct":250,"attempts":-4},"__proto__":{"passed":true}},
+ "testSeen":{"l1":["q1",7,{"x":1},"q2"]},"seenTypes":{"tap":1,"__proto__":1},"lang":"fr","theme":"neon",
+ "sound":"loud","gender":"Robot","mascot":"nobody","eraseGen":99}"""
+
+
+def _forbidden_keys(x, path=""):
+    out = []
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if k in ("__proto__", "constructor", "prototype") or len(k) > 140:
+                out.append("%s%s" % (path, k[:20]))
+            out.extend(_forbidden_keys(v, path + k[:20] + "."))
+    elif isinstance(x, list):
+        for v in x:
+            out.extend(_forbidden_keys(v, path))
+    return out
+
+
+def _bad_stars(st):
+    return ["%s/%s/%s=%r" % (ck, lk, a, v) for ck, ls in _dict(_dict(st).get("progress")).items()
+            for lk, g in _dict(ls).items() for a, v in _dict(g).items()
+            if not (isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 3)]
+
+
+def bring_rejects_bad_files(env, sabotage=None, prelude=None):
+    """F4. What is not ours is refused without touching her progress: a photo, cut-off JSON,
+    another app's JSON, the wrong kind, a 3 MB file. A file that is ours but poisoned (__proto__,
+    constructor, stars of 99, -1 and "3", gems of 10^12, a 200-character key) is cleaned: nothing
+    pollutes Object.prototype, every star is 0-3, nothing of hers goes down."""
+    tag = "[%s] bring_rejects_bad_files" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+    good = compact(_envelope(seed))
+    big = compact(_envelope(dict(seed, testSeen={"pad": ["q%07d" % i for i in range(330000)]})))
+    refused = [("a photo", "photo.jpg", b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 40, "image/png"),
+               ("cut-off JSON", "bodhya-progress-2026-11-05.json", good[:len(good) // 2], "application/json"),
+               ("another app's JSON", "data.json", '{"foo":1}', "application/json"),
+               ("the wrong kind", "x.json", compact(dict(_envelope(seed), kind="other-progress")), "application/json"),
+               ("a 3 MB file", "bodhya-progress-2026-11-05.json", big, "application/json")]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        if len(big) < 3 * 1024 * 1024:
+            probs.append("the harness's big file is only %d bytes" % len(big))
+        for what, name, data, mime in refused:
+            before = _local(ph)
+            asked, said = _bring(ph, data, name=name, mime=mime)
+            if asked is not None:
+                probs.append("%s got the confirm sheet" % what)
+                ph.page.click("#bringNo", timeout=3000)
+            elif (said or {}).get("msg") != "notours":
+                probs.append("%s was answered with %r" % (what, said))
+            if _local(ph) != before:
+                probs.append("%s changed her stored state" % what)
+        evil = '{"kind":"bodhya-progress","v":1,"app":"%s","savedAt":"%s","state":%s}' % (APP_ID, SAVED_AT, EVIL_STATE.replace("PAD", "k" * 200))
+        try:
+            asked, said = _bring(ph, evil)
+            if asked is None:
+                probs.append("the poisoned file was refused (%r), not cleaned" % (said,))
+        except PWTimeout:
+            # Still look at what it did: a poisoned merge can stall after it has polluted.
+            probs.append("the poisoned file got no answer")
+        now = _parsed(_local(ph))
+        polluted = ph.page.evaluate("() => [({}).polluted, Object.prototype.polluted, Object.getPrototypeOf(state) === Object.prototype]")
+        if polluted[0] is not None or polluted[1] is not None or not polluted[2]:
+            probs.append("Object.prototype was polluted: %r" % (polluted,))
+        bad = _forbidden_keys(now) + _bad_stars(now)
+        if bad:
+            probs.append("the stored state holds %s" % _clip(bad, 4))
+        probs.extend(lowered(seed, now, GUEST))
+        if (_num(_dict(now).get("coins")) or 0) > 10000000:
+            probs.append("gems became %s" % _dict(now).get("coins"))
+        if _settings(now) != _settings(seed) or _dict(now).get("eraseGen", 0) != 0:
+            probs.append("the poisoned file changed her settings or eraseGen")
+        if ph.NATIVE is not None:
+            _agree(ph, probs, "after the poisoned file,")
+
+    return _rel("F4", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "a photo, cut-off JSON, another app's JSON, the wrong kind and a 3 MB file were refused untouched, "
+                "and a poisoned file was cleaned: no pollution, every star 0-3, nothing lowered")
+
+
+def bring_after_erase(env, sabotage=None, prelude=None):
+    """F5. She saves her file, erases, and brings the file back: every star returns, and stays for
+    two launches, with the mirror on in the app."""
+    tag = "[%s] bring_after_erase" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        _, text = _save_file(ph)
+        ph.page.click("#dClose", timeout=3000)
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        asked, said = _bring(ph, text)
+        if asked is None:
+            probs.append("after the erase the file was not taken (%r)" % (said,))
+            return
+        for which in ("right after", "after a launch", "after another launch"):
+            if which != "right after":
+                ph.launch("new")
+            loc = _parsed(_local(ph))
+            low = lowered(seed, loc, GUEST)
+            if low:
+                probs.append("%s: %s" % (which, _clip(low, 3)))
+                break
+            if ph.NATIVE is not None:
+                _agree(ph, probs, which + ",")
+
+    return _rel("F5", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "a file saved before an erase brought every star back, and they stayed for two launches")
+
+
+def bring_any_name_or_type(env, sabotage=None, prelude=None):
+    """F6. The file as pickers hand it over after WhatsApp or Bluetooth: no type, octet-stream, a
+    ' (1)' in the name, no extension. Each is brought in."""
+    tag = "[%s] bring_any_name_or_type" % env.mode
+    fx = _mid()
+    seed = fx.seed_states[GUEST]
+    lessons = _fresh_lessons(fx, 3)
+    kinds = [("bodhya-progress-2026-11-05 (1).json", "application/octet-stream"),
+             ("bodhya-progress-2026-11-05", ""),
+             ("DOC-20261105-WA0003.json", "text/plain")]
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        for (name, mime), (ck, lk) in zip(kinds, lessons):
+            asked, said = _bring(ph, compact(_envelope(_raised(seed, ck, lk))), name=name, mime=mime)
+            if asked is None or _learn_star(_parsed(_local(ph)), ck, lk) != 3:
+                probs.append("%r as %r was not brought in (%r)" % (name, mime or "no type", said))
+
+    def old_webview(ph, probs):
+        # A WebView from before Chrome 76 has no File.text(); the file must still come in.
+        ph.ctx.add_init_script("/* e2e: a WebView older than Chrome 76 */delete Blob.prototype.text;")
+        ph.seed(fx)
+        ph.launch("new")
+        (ck, lk) = lessons[0]
+        asked, said = _bring(ph, compact(_envelope(_raised(seed, ck, lk))))
+        if asked is None or _learn_star(_parsed(_local(ph)), ck, lk) != 3:
+            probs.append("with no File.text(), as before Chrome 76, the file was not brought in (%r)" % (said,))
+
+    probs = _full_phone_run(_file_phone(env, sabotage, prelude), steps)
+    probs += _full_phone_run(_file_phone(env, sabotage, prelude), old_webview)
+    return _rel("F6", tag, probs,
+                "files with no type, octet-stream, a ' (1)' name, no extension or a WhatsApp name were all brought in, "
+                "also by a WebView with no File.text()")
+
+
+for _name, _fn in (("save_bring_round_trip", save_bring_round_trip),
+                   ("save_hands_over_file", save_hands_over_file),
+                   ("bring_asks_and_follows_d5", bring_asks_and_follows_d5),
+                   ("bring_never_lowers", bring_never_lowers),
+                   ("bring_rejects_bad_files", bring_rejects_bad_files),
+                   ("bring_after_erase", bring_after_erase),
+                   ("bring_any_name_or_type", bring_any_name_or_type)):
+    def _t(env, report, _fn=_fn):
+        for _code, ok, msg in _fn(env):
+            report.check(ok, msg)
+    test(_name)(_t)
+
+
 @test("level_test_promotes")
 def t_level_test_promotes(env, report):
     for _code, ok, msg in level_test_promotes(env):
@@ -3026,6 +3511,25 @@ FOLD_ENDS_WITH_ERASE_ONLY = _sab("only Start fresh's own save can end a waiting 
                                  "var real=save;save=function(){var k=real.apply(this,arguments);endFoldWhenKept=false;return k;};")
 
 
+# Task 5. Bringing a file replaces her state with the file's, so an older file lowers her.
+BRING_REPLACES = _sab("a brought file replaces her state", "mergeBrought=function(cur,clean){return JSON.parse(JSON.stringify(clean));};")
+# Bringing a file merges at once, without the confirm sheet.
+BRING_NO_ASK = _sab("a file is brought in without asking", "askBring=function(){return Promise.resolve(true);};")
+# The file's eraseGen is taken along with it.
+BRING_TAKES_ERASEGEN = _sab("a brought file's eraseGen is taken", "var c0=cleanImportedState;cleanImportedState=function(o){"
+                            "var r=c0(o);if(o&&typeof o.eraseGen==='number')r.eraseGen=o.eraseGen;return r;};var m0=mergeBrought;"
+                            "mergeBrought=function(cur,clean){var n=m0(cur,clean);if('eraseGen' in clean)n.eraseGen=clean.eraseGen;return n;};")
+# The file's settings are taken even when she has progress (D5 ignored).
+BRING_TAKES_SETTINGS = _sab("a brought file's settings always win", "var m1=mergeBrought;mergeBrought=function(cur,clean){"
+                            "var n=m1(cur,clean);SETTING_FIELDS.forEach(function(f){if(clean[f]!==undefined)n[f]=clean[f];});return n;};")
+# A file is trusted as it comes.
+BRING_UNCLEANED = _sab("a brought file is not cleaned", "cleanImportedState=function(o){return o;};")
+# The file carries every profile on the phone, the retired account's too.
+FILE_HOLDS_OTHERS = _sab("the file holds every profile on the phone", "var p0=progressFileText;progressFileText=function(st){"
+                         "var o=JSON.parse(p0(st));o.others={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);"
+                         "if(k.indexOf('hikmat_state_')===0)o.others[k]=1;}return JSON.stringify(o);};")
+
+
 def _private_output_problems():
     """Judge a private save twice, once where every check passes and once where every check
     fails, and crash one run, then return every line that shows an old student id, one of her
@@ -3171,6 +3675,18 @@ def t_self_test(env, report):
            erase_with_waiting_fold_and_stale_mirror(nenv, sabotage=KEEP_WAITING_FOLD), ["N6b"], [("N6b", "(a)")])
     judged("a native copy that replaces hers", native_lower_never_wins(nenv, sabotage=NATIVE_REPLACES),
            ["N4"], [("N4", "coins")])
+    judged("a brought file that replaces her state", bring_never_lowers(env, sabotage=BRING_REPLACES),
+           ["F3"], [("F3", "coins")])
+    judged("a file brought in without asking", bring_asks_and_follows_d5(env, sabotage=BRING_NO_ASK),
+           ["F1c"], [("F1c", "without asking")])
+    judged("a brought file whose eraseGen is taken", bring_asks_and_follows_d5(env, sabotage=BRING_TAKES_ERASEGEN),
+           ["F1d"], [("F1d", "eraseGen")])
+    judged("a brought file whose settings always win", bring_asks_and_follows_d5(env, sabotage=BRING_TAKES_SETTINGS),
+           ["F1d"], [("F1d", "her settings became")])
+    judged("a brought file that is not cleaned", bring_rejects_bad_files(env, sabotage=BRING_UNCLEANED),
+           ["F4"], [("F4", "polluted")])
+    judged("a file that holds every profile on the phone", save_bring_round_trip(env, sabotage=FILE_HOLDS_OTHERS),
+           ["F1b"], [("F1b", "S-0042")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------

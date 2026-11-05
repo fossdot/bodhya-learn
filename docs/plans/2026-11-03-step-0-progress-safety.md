@@ -251,7 +251,8 @@ Tests that replay real saves through the update must prove that no star total dr
 **Files:** in `index.html`, `openProgressSheet` (~3617): add `#progSave` and `#progBring` buttons, each with `min-height:48px`. Add a hidden `<input type="file" id="progFile">` with no `accept`, because Android pickers hide WhatsApp downloads saved as octet-stream.
 
 **Interfaces (produces):**
-- `progressFileText(state) → string`, the envelope from Task 1. File name: `bodhya-progress-YYYY-MM-DD.json`.
+- `progressFileText(state) → string`, the envelope from Task 1: `{kind:"bodhya-progress", v:1, app, savedAt, state}` and nothing else. **One learner only:** `state` is the profile on screen. No other `hikmat_state_*`, no `hikmat_current`, no account, name or student id goes in. File name: `bodhya-progress-YYYY-MM-DD.json`, and it never holds anyone's name.
+- `starsIn(state) → int`: her star total by the same rule as `totalStars()`.
 - `readProgressFile(text) → {state} | {error:"toobig"|"notjson"|"notours"}`. The limit is 2 MB, checked on `file.size` before reading. It accepts any `v ≥ 1` and reads only known fields.
 - `cleanImportedState(obj) → state`:
   - Every key is a string of at most 140 characters, and `__proto__`, `constructor` and `prototype` are dropped at every level.
@@ -264,7 +265,11 @@ Tests that replay real saves through the update must prove that no star total dr
 - `saveProgressFile() → Promise<boolean>`.
   - Android: `Filesystem.writeFile({path, data, directory:"CACHE", encoding:"utf8"})`, then `Share.share({title, files:[uri]})`.
   - Web: `navigator.share({files})` when `navigator.canShare({files})` allows it, otherwise an `<a download>`.
-- `bringProgressFile(file: File) → Promise<{ok, stars?, error?}>`: `mergeSavedState(state, clean, {sameLearner:true})`, applying D5 for settings, then `save()`, `refreshTop()` and a re-render.
+- `bringProgressFile(file: File) → Promise<{ok, stars?, error?}>`:
+  1. Read and clean the file. A bad file gets the bad-file message, and nothing else happens.
+  2. **Ask first.** A confirm sheet (`#bringWrap`) says how many stars the file holds (`starsIn(clean)`), with "Bring it in" (`#bringYes`) and "Not now" (`#bringNo`, last, under her thumb). Not now changes nothing.
+  3. On yes: `mergeSavedState(clone(state), clean, {sameLearner:true})`. **D5:** the file's settings (lang, theme, sound, gender, mascot, prefsTouched) are taken only when she has no progress yet (no star, no gem, no level test passed). Otherwise hers stay. **`eraseGen` in the file is ignored:** bringing a file in is her own choice, so her `eraseGen` stays as it is.
+  4. Then `save()`, await `mirrorNow`, `refreshTop()` and a re-render. If neither copy took it, nothing changes and she is told so.
 - **Copy (EN / HI):**
 
 | Where | English | Hindi |
@@ -273,21 +278,48 @@ Tests that replay real saves through the update must prove that no star total dr
 | Save button, second line | A small file to keep on WhatsApp, Bluetooth or Files | एक छोटी फ़ाइल, जिसे WhatsApp, ब्लूटूथ या Files में रखा जा सकता है |
 | Bring button | Bring my progress | अपनी प्रगति वापस लाओ |
 | Bring button, second line | Nothing you have now is lost | अभी का कुछ भी नहीं मिटेगा |
+| Confirm title | Bring in this progress? | यह प्रगति वापस लानी है? |
+| Confirm body | This file has N stars. You keep the best of this file and this phone. | इस फ़ाइल में N सितारे हैं। फ़ाइल और इस फ़ोन में से जो बेहतर है, वही रहेगा। |
+| Confirm yes | Bring it in | वापस लाओ |
+| Confirm no | Not now | अभी नहीं |
 | After a good file | Progress brought back: N stars | प्रगति वापस आ गई: N सितारे |
+| When bringing fails | Could not bring it in. Try again. | वापस नहीं लाया जा सका। फिर से कोशिश करो। |
 | After any bad file | This is not a Bodhya progress file. | यह बोध्या की प्रगति वाली फ़ाइल नहीं है। |
 | After saving | File saved. Keep it safe. | फ़ाइल सहेज ली गई। इसे संभालकर रखो। |
 | When saving fails | Could not save the file. Try again. | फ़ाइल सहेजी नहीं जा सकी। फिर से कोशिश करो। |
 
 - [ ] **Step 1: Failing tests.**
-  - **F1 `save_bring_round_trip` (web):** Save produces a download whose envelope `state` deep-equals local. Bringing it in a fresh context gives the same `SNAP`, settings included.
+  - **F1 `save_bring_round_trip` (web):** Save produces a download whose envelope `state` deep-equals local. Bringing it in a fresh context shows the star count, and after yes gives the same `SNAP`, settings included.
+  - **F1b `file_holds_one_learner`:** on the retired-account phone (S-0042's account and name still stored), the saved file's top-level keys are exactly the envelope's, its text holds no student id, no name and no other `hikmat_state_*`, and the file name matches `^bodhya-progress-\d{4}-\d{2}-\d{2}\.json$`.
+  - **F1c `bring_asks_first`:** the confirm sheet says the file's star count. Not now leaves `SNAP` and both stores unchanged.
+  - **F1d `bring_settings_d5`:** a file brought onto a phone with progress keeps her settings. The same file on a phone with no progress takes the file's settings. A file with `eraseGen` 7 leaves hers as it was, in both cases.
   - **F2 (native):** Save calls fake `writeFile` with `directory:"CACHE"` and the file name pattern, and fake `share` with that uri.
   - **F3 `bring_never_lowers`:** bringing a lower file lowers nothing. Bringing the same file twice leaves the second `SNAP` equal to the first.
   - **F4 `bring_rejects_bad_files`:** PNG bytes, cut-off JSON, `{"foo":1}`, the wrong `kind`, a 3 MB file, and `__proto__`/`constructor` keys with stars "3", 99, -1 and NaN. Each leaves the state unchanged or cleaned, keeps `({}).polluted === undefined`, shows the message, and raises no `pageerror`.
-  - **F5:** a file saved before an erase, brought in after it, restores the stars.
+  - **F5:** a file saved before an erase, brought in after it, restores the stars, and they survive two relaunches with the mirror on.
+  - **F6 `bring_any_name_or_type`:** the file picked as WhatsApp and Android pickers hand it over: type `""` or `application/octet-stream`, and names like `bodhya-progress-2026-11-05 (1).json` or `bodhya-progress-2026-11-05` with no extension. All are brought in.
+  - **F7 (manual, Android):** the real path. Save on emulator A, send the file over WhatsApp, open it on emulator B, and bring it in there. Most girls will move it that way. Record the steps and the result under "As built".
 - [ ] **Step 2: Run.** Expected: FAIL (no `#progSave`).
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** everything.
 - [ ] **Step 5: Commit:** "She can carry her progress to a new phone as a small file".
+
+**As built (5 Nov):**
+- The tests live in seven harness tests, in both modes: `save_bring_round_trip` (F1, F1b), `save_hands_over_file` (F2; on the web through Web Share, in the app through Filesystem and Share, where a share she cancels is not called saved), `bring_asks_and_follows_d5` (F1c, F1d), `bring_never_lowers` (F3), `bring_rejects_bad_files` (F4), `bring_after_erase` (F5) and `bring_any_name_or_type` (F6).
+- Every message in the My progress sheet carries `data-msg` (`saved`, `savefail`, `brought`, `bringfail`, `notours`, `erasewarn`, `erasefail`), so the tests check which message showed in either language.
+- Bring reads the file with `File.text()` where it exists and `FileReader` where it does not (WebView before Chrome 76). F6 runs once with `Blob.prototype.text` deleted.
+- The confirm sheet has a 🔊 button (48 px) that reads its title, body and both buttons. The 🔊 line and the share-sheet title ("My Bodhya progress" / "मेरी बोध्या प्रगति") are new strings for Task 6's Hindi check.
+- Self-test sabotages: a brought file that replaces her state (F3), a bring that does not ask (F1c), the file's eraseGen taken (F1d), the file's settings always taken (F1d), a file that is not cleaned (F4: it really does pollute `Object.prototype` through `mergeSavedState`), and a file that holds every profile on the phone (F1b).
+- Checked at 360x640 in Hindi light and dark, and in English: nothing overflows sideways. Save and Bring are 81-103 px tall. Start fresh and Close are 46 px in English; Task 6 rebuilds that sheet and must bring them to 48. With the "brought back" message showing, the sheet is taller than the screen and scrolls, and its × stays pinned.
+- The three plugins are installed now (`--save-exact`, Task 7's first step brought forward), because F7 needs them on a device. None adds a permission.
+- **F7, done on two Android 15 emulators (5 Nov), without WhatsApp:**
+  1. A: 487 stars and 1,240 gems, in both copies after a relaunch.
+  2. My progress, Save (a real tap). The Android share sheet opened with `bodhya-progress-2026-11-05.json`; its targets were Quick Share, Drive and Gmail. The file in the app's cache is the envelope alone, with no name, id or other profile. Backing out of the share sheet showed no "saved".
+  3. The file was put where WhatsApp keeps received documents on B: `Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/`.
+  4. B (nothing played): My progress, Bring (a real tap). Android's picker opened with every type allowed. The file was **not** in Recent, Documents or search. It was reachable through ☰, the device, Android, media, com.whatsapp, WhatsApp, Media, WhatsApp Documents: 7 taps deep.
+  5. Picking it showed "This file has 487 stars". Bring it in: 487 stars and 1,240 gems in both copies, her settings from the file (D5), eraseGen 0, the same after two relaunches.
+  - **Still to do:** the WhatsApp hop itself. The emulators have no Play Store, and WhatsApp needs a phone number that receives a code. See Q4.
+  - Emulator notes: `hikmat_test` cannot start (its API 34 image is not installed); `bodhya_b35` was made from the Android 15 image for this. `eb_api26` (Android 8) has WebView 58, where the game does not run at all: it uses object spread, which needs Chrome 60, and so did v7.
 
 ### Task 6: Start fresh confirm sheet and the 7-day undo (rule 11)
 
@@ -359,7 +391,7 @@ Tests that replay real saves through the update must prove that no star total dr
 - `Hikmat Games/CLAUDE.md`: the Android section (plugins, mirror, undo, backup rules, the e2e gate).
 - `playstore/`: v8 release notes and `v8-closed-test-check.md`.
 
-- [ ] **Install and build.** Run `npm install --save-exact` for the three plugins, then `npx cap sync android`, then `android-app/build.sh`. Expected: e2e PASS, then the signed AAB.
+- [ ] **Install and build.** The three plugins were installed with `--save-exact` in Task 5. Run `npx cap sync android`, then `android-app/build.sh`. Expected: e2e PASS, then the signed AAB.
 - [ ] **Move the release token.** game.html changed in this PR, so `CACHE` in `hikmat/public/sw.js` goes one step up (`hikmat-pwa-v13` → `v14`), once, in its own commit. The same step is in `SECURITY.md`, "Every web deploy", for any later web deploy.
 - [ ] **Check the AAB.**
   - `jarsigner -verify` passes, and the SHA-256 is `2A:6C:…:DC:26`.
@@ -377,9 +409,13 @@ Tests that replay real saves through the update must prove that no star total dr
   - Vishal uploads v8 to the closed testing track only.
   - `v8-closed-test-check.md` asks 2 or 3 tester phones to note the My progress numbers before updating, check after updating that they are the same or higher and that played lessons are open, then Save my progress and send the file, with a parent's OK.
   - Those files go into `tests/saves/private/`, and the harness must pass on them before v8 goes anywhere else.
+- [ ] **The WhatsApp hop (F7) on two real tester phones.** Save on phone A, send the file over WhatsApp, and bring it in on phone B through the in-app picker. Note how many taps the picker takes to reach it, and whether it shows under Recent or Documents.
+- [ ] **What WhatsApp hands over (for "Open with Bodhya", Q5).** On the same phones, tap the received file in WhatsApp and record the intent it sends: action, MIME type, file name and URI scheme. A build with a broad filter that only logs what arrives, installed on the test phones alone, shows it. The release filter then matches only that.
 - [ ] **Open the PRs.** Push and open the PRs: `fix/topbar-long-back-label` → `nightly`, then `safety/step-0`, with the screenshots, test output and android-app diffs. Web: no deploy.
 
 ## Not in this step
+
+- **A WebView too old for the game** (noted 5 Nov, for after v8). The game needs Chrome 60 (object spread, in v7 too); an Android 8 phone whose WebView never updated has 58 and shows a blank screen. Instead: a small script, run before the game's, that shows a plain message in English and Hindi, "Please update Android System WebView", with what to tap. Check Play Console (Android vitals, device catalog) for how many installs have a WebView older than 60.
 
 - Key aliasing for renamed content: rule 10.
 - Staged rollout: rule 12, at production.
@@ -392,3 +428,9 @@ Tests that replay real saves through the update must prove that no star total dr
 
 - **Q1.** Should `android-app/` move into bodhya-learn, with no signing material? **Yes.** The keystores, `keystore.properties` and the credentials files stay outside git; the ignore list covers `keystore/`, `*.jks`, `*.keystore`, every `keystore.prop*`, `local.properties`, `google-services.json`, `node_modules/`, `build/`, `.gradle/` and `android/app/build/`.
 - **Q2.** Should `"hostname": "localhost"` be pinned in `capacitor.config.json`? **Yes**, with `"androidScheme": "https"` kept explicit. Both are today's values, so the origin, and the localStorage under it, does not change.
+
+## Open questions (5 Nov, answered the same day)
+
+- **Q3.** `npm audit` reports a critical advisory for `@capacitor/android` 8.3.5 to 8.4.2 (GHSA-rvm3-566m-v7fv: remote content can be loaded at the app origin through the internal HTTP proxy path). The app is on 8.4.1, and 8.4.3 fixes it. Should v8 move `@capacitor/android`, `core` and `cli` to 8.4.3? The scheme and hostname stay as they are. **Yes**, the smallest change that closes it, with `core` and `cli` in step. The fix touches the app origin her progress lives under, so after the bump the upgrade from the real v7 AAB to v8 is rerun on the emulator: stars, level and played lessons must all still be there.
+- **Q4.** The WhatsApp hop of F7. WhatsApp needs a phone number that receives a code, and these emulators have no Play Store. Options: Vishal registers WhatsApp on emulator A with a test number and links emulator B as a companion device, or the hop is done on two real phones in closed testing (Task 7). **Real phones, in closed testing (Task 7).** WhatsApp is not registered on an emulator.
+- **Q5.** In Android's picker, a file in WhatsApp's documents folder took 7 taps to reach (step 4 above). If a real WhatsApp download is no easier to find, should the app also open a progress file that she taps in WhatsApp ("Open with Bodhya")? That is an intent filter in the manifest, and a launch path that hands the file to the same Bring flow. **Yes.** First see on the real phones what WhatsApp actually hands over (file name and type), then match only that, so Bodhya never offers to open every JSON file on the phone. It goes through the same checks and the same "This file has N stars" confirm as Bring. The in-app picker stays as the fallback.
