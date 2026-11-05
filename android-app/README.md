@@ -12,9 +12,13 @@ syncs to the Frappe backend at `https://learn.bodhya.net`.
   absolute asset paths resolve inside the WebView (origin `https://localhost`).
 - `capacitor.config.json` sets `appId=net.bodhya.learn`, `appName=Bodhya`, `webDir=www`,
   `androidScheme=https`.
-- Release signing reads `android/keystore.properties`, which points at the upload keystore. Neither
-  is in git: this repo is public. `build.sh` stops if `keystore.properties` is missing, because
-  Gradle would otherwise build an unsigned release.
+- Release signing reads `keystore.properties`, which points at the upload keystore. Neither is in
+  git: this repo is public. `build.gradle` reads `BODHYA_KEYSTORE_PROPERTIES` when it is set, so the
+  file is used where it lives and never copied in. `build.sh` sets it (to `android/keystore.properties`
+  if there is one, else the copy beside the upload key in `~/code/Hikmat Games/android-app/android/`)
+  and stops if none is found, because Gradle would otherwise build an unsigned release.
+- `build.sh` builds nothing until the progress-safety harness (`../e2e-progress-safety.py --mode
+  both`, about 10 minutes) passes, and `../index.html` matches `../hikmat/public/game.html`.
 
 ## Toolchain (already installed on this machine)
 - **JDK 21** (`brew install openjdk@21`) — Capacitor 8 requires 21.

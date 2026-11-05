@@ -2,7 +2,10 @@ apply plugin: 'com.android.application'
 
 // Load release signing config from keystore.properties (kept OUT of version control).
 // If absent, the release build stays unsigned so debug/CI still works.
-def keystorePropertiesFile = rootProject.file("keystore.properties")
+// BODHYA_KEYSTORE_PROPERTIES points at one kept outside this repo (build.sh sets it), so the
+// file is read where it lives and never copied in. Its storeFile must be an absolute path.
+def keystorePropertiesFile = System.getenv("BODHYA_KEYSTORE_PROPERTIES") ?
+        new File(System.getenv("BODHYA_KEYSTORE_PROPERTIES")) : rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
@@ -15,8 +18,8 @@ android {
         applicationId "net.bodhya.learn"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "1.0"
+        versionCode 8
+        versionName "8"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

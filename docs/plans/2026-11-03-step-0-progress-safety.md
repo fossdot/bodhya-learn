@@ -405,14 +405,14 @@ Tests that replay real saves through the update must prove that no star total dr
 - `Hikmat Games/CLAUDE.md`: the Android section (plugins, mirror, undo, backup rules, the e2e gate).
 - `playstore/`: v8 release notes and `v8-closed-test-check.md`.
 
-- [ ] **Install and build.** The three plugins were installed with `--save-exact` in Task 5. Run `npx cap sync android`, then `android-app/build.sh`. Expected: e2e PASS, then the signed AAB.
-- [ ] **Move the release token.** game.html changed in this PR, so `CACHE` in `hikmat/public/sw.js` goes one step up (`hikmat-pwa-v13` → `v14`), once, in its own commit. The same step is in `SECURITY.md`, "Every web deploy", for any later web deploy.
-- [ ] **Check the AAB.**
+- [x] **Install and build.** The three plugins were installed with `--save-exact` in Task 5. Run `npx cap sync android`, then `android-app/build.sh`. Expected: e2e PASS, then the signed AAB.
+- [x] **Move the release token.** game.html changed in this PR, so `CACHE` in `hikmat/public/sw.js` goes one step up (`hikmat-pwa-v13` → `v14`), once, in its own commit. The same step is in `SECURITY.md`, "Every web deploy", for any later web deploy.
+- [x] **Check the AAB.**
   - `jarsigner -verify` passes, and the SHA-256 is `2A:6C:…:DC:26`.
   - versionCode is 8, and the manifest's only permission is INTERNET.
   - The `Preferences`, `Share` and `Filesystem` plugin classes are present.
   - `base/assets/public/index.html` contains no `chat.whatsapp`, no `youtube` and no live `ai_ask`.
-- [ ] **Check on the emulator.**
+- [x] **Check on the emulator.**
   1. Install v7, built from `play-v7` with the upload key, and earn some stars.
   2. Install v8 over it. The stars are intact.
   3. Save. The share sheet opens, and the file lands in Files.
@@ -426,6 +426,33 @@ Tests that replay real saves through the update must prove that no star total dr
 - [ ] **The WhatsApp hop (F7) on two real tester phones.** Save on phone A, send the file over WhatsApp, and bring it in on phone B through the in-app picker. Note how many taps the picker takes to reach it, and whether it shows under Recent or Documents.
 - [ ] **What WhatsApp hands over (for "Open with Bodhya", Q5).** On the same phones, tap the received file in WhatsApp and record the intent it sends: action, MIME type, file name and URI scheme. A build with a broad filter that only logs what arrives, installed on the test phones alone, shows it. The release filter then matches only that.
 - [ ] **Open the PRs.** Push and open the PRs: `fix/topbar-long-back-label` → `nightly`, then `safety/step-0`, with the screenshots, test output and android-app diffs. Web: no deploy.
+
+
+**As built (5 Nov), the parts that need no phone:**
+- **Release token:** `CACHE` is `hikmat-pwa-v14`, in its own commit.
+- **versionCode 8, and versionName "8".** v7 and every release before it said "1.0", so a tester could not tell from Settings → Apps whether the update had landed. versionName is a label only; package, key, scheme and hostname are unchanged.
+- **Signing.** `keystore.properties` lives beside the upload key in `~/code/Hikmat Games/android-app/android/`, not in this repo. `build.gradle` reads it by path from `BODHYA_KEYSTORE_PROPERTIES`, which `build.sh` sets; its `storeFile` is absolute. Nothing is copied into the repo.
+- **`build.sh`** stops unless `index.html` and `hikmat/public/game.html` are byte-identical (the harness tests one, the AAB ships the other), then runs `e2e-progress-safety.py --mode both` and builds nothing if it fails. `SKIP_E2E=1` is only for rebuilding a tree that just passed. The build run: 335 passed, 0 failed (626 s), then the signed AAB.
+- **The v7 AAB is kept** as `playstore/hikmat-release-v7.aab`, because `build.sh` overwrites `hikmat-release.aab`.
+- **The AAB:**
+  - `jar verified`, signer SHA-256 `2A:6C:58:…:DC:26`;
+  - versionCode 8; permissions INTERNET and androidx's own `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, the same two as v7;
+  - no new intent filter;
+  - the Preferences, Share and Filesystem plugin classes are in the dex and in `capacitor.plugins.json`;
+  - `capacitor.config.json` has `androidScheme` https and `hostname` localhost;
+  - `base/assets/public/index.html` equals `www/index.html`, with no `chat.whatsapp` and no `youtube`. Its three `ai_ask` hits are comments and the cut call (`const r = null`), the same three as v7.
+- **Emulator** (Android 15, WebView 124). Both AABs were made into APKs by bundletool and signed with the same local debug key. Each step was judged with the harness's own `SNAP_JS` and a field-by-field comparison against v7's state.
+  1. v7, seeded through its own `save()` and relaunched: 487 stars, 1,240 gems, level 2, 40 played lessons open, at `https://localhost`.
+  2. v8 installed over it as an in-place update (first install time kept): nothing lost or lowered, and the native copy equals localStorage.
+  3. Save my progress opened the share sheet with `bodhya-progress-2026-11-05.json`. The emulator's sheet offers only Quick Share, Drive and Gmail, all of which need an account, and Files takes no shares. So the cache file Bodhya handed over (4,091 bytes, 487 stars, no eraseGen) was put in Downloads.
+  4. Bring my progress: the picker showed the file first under Recent (1 tap). The confirm said "This file has 487 stars", and Bring it in lowered nothing.
+  5. Start fresh, then Erase: 0 stars, eraseGen 1, the undo copy in both stores, and "7 days left", still there after a relaunch. Bring back what I erased: 487 stars, eraseGen 2, the undo copy gone from both stores, nothing lost.
+  6. A debug build of the same tree installed over it. After `run-as … rm -rf app_webview`, the next launch had 487 stars, level 2 and 40 played lessons from the native copy, and the launch after it too.
+- **Closed-test checklist:** `playstore/v8-closed-test-check.md`, run without Claude. It has a record sheet per tester phone: Android and WebView versions; stars before and after the update from v7; the WhatsApp hop (name and type WhatsApp shows, taps to find the file, whether "Open with Bodhya" appeared); Start fresh then Undo, before and after.
+  - The receiving phone is Vishal's, starting at 0 and erased between testers, because Bring merges into the phone's own progress.
+  - Start fresh comes after the hop, so her sent file is a way back if Undo fails.
+  - What WhatsApp hands over comes from `adb logcat` on the receiving phone (action, type, URI scheme). A logging build is needed only if WhatsApp finds no app to open the file at all.
+- `Hikmat Games/CLAUDE.md`, Android section: points at this repo's `android-app/` (the copy in Hikmat Games is the old checkout, kept only for the keystore), and covers the build gate, the plugins, where her progress lives, the backup rules and the upgrade check.
 
 ## Not in this step
 
