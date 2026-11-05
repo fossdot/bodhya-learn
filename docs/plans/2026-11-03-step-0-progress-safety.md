@@ -360,6 +360,7 @@ Tests that replay real saves through the update must prove that no star total dr
 - `playstore/`: v8 release notes and `v8-closed-test-check.md`.
 
 - [ ] **Install and build.** Run `npm install --save-exact` for the three plugins, then `npx cap sync android`, then `android-app/build.sh`. Expected: e2e PASS, then the signed AAB.
+- [ ] **Move the release token.** game.html changed in this PR, so `CACHE` in `hikmat/public/sw.js` goes one step up (`hikmat-pwa-v13` → `v14`), once, in its own commit. The same step is in `SECURITY.md`, "Every web deploy", for any later web deploy.
 - [ ] **Check the AAB.**
   - `jarsigner -verify` passes, and the SHA-256 is `2A:6C:…:DC:26`.
   - versionCode is 8, and the manifest's only permission is INTERNET.
