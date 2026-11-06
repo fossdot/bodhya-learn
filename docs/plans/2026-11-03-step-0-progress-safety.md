@@ -59,7 +59,9 @@ Tests that replay real saves through the update must prove that no star total dr
 - **D4.** Real tester saves go in `apps/hikmat/tests/saves/private/`, which is gitignored. The harness runs them when they are present. Synthetic fixtures are committed.
 - **D5.** Bringing a file adopts its settings only when this profile has no progress yet. Otherwise only progress merges.
 - **D6.** The top-bar fix for long back labels gets its own PR, and ships in v8.
-- **D7.** The undo copy lives under the new key **`hikmat_undo_<id>`** (`hikmat_undo_guest` today), in localStorage and in Preferences. It is `{kind:"bodhya-erase-undo", v:1, erasedAt:ms, until:ms, state:{…}}`. It is never merged automatically, only restored on purpose.
+- **D7.** The undo copy lives under the new key **`hikmat_undo_<id>`** (`hikmat_undo_guest` today), in localStorage and in Preferences. It is `{kind:"bodhya-erase-undo", v:1, erasedAt:ms, until:ms, state:{…}}`. It is never merged automatically, only restored on purpose. A second Start fresh inside the 7 days folds the earlier copy into the new one, the higher of each, and the copy then runs 7 days from the newest erase (review finding F1, 6 Nov).
+- **D9.** (6 Nov, review finding F4) Every state this build writes in the app carries **`nativeCopy: true`**, and the first one kept sets the key **`hikmat_native_saved`**. v7 carries the field along on its own saves, but its Start fresh builds a new state without it. So a launch that finds an unmarked state, in storage that has held a marked one, with a marked native copy, knows v7 erased there: her state stands, and the native copy becomes the undo copy for 7 days.
+- **D10.** (6 Nov, review finding F3) A launch that begins without her state in localStorage writes **`hikmat_native_unmerged`**, and only a merge that localStorage kept removes it. Until then, every launch treats localStorage as missing, so the native copy stays the base and her settings come from it.
 - **D8.** In the My progress sheet, Start fresh moves to the very end, below Close and set apart, following Figma's "Erase sits last, apart from the rest". Sheets are always bottom-anchored (`.sheetwrap { align-items:flex-end }`). So the confirm sheet's "Keep it" button, the last one, sits where her thumb was, and Erase sits above it.
 
 ## Review Focus
@@ -454,6 +456,43 @@ Tests that replay real saves through the update must prove that no star total dr
   - Start fresh comes after the hop, so her sent file is a way back if Undo fails.
   - What WhatsApp hands over comes from `adb logcat` on the receiving phone (action, type, URI scheme). A logging build is needed only if WhatsApp finds no app to open the file at all.
 - `Hikmat Games/CLAUDE.md`, Android section: points at this repo's `android-app/` (the copy in Hikmat Games is the old checkout, kept only for the keystore), and covers the build gate, the plugins, where her progress lives, the backup rules and the upgrade check.
+
+## Independent review (6 Nov)
+
+As agreed on 3 Nov, a fresh agent that had seen none of these sessions reviewed the whole branch before any phone gets v8. It had the code, `docs/progress-logic.md`, this plan and the commands, and none of the author's conclusions.
+- It wrote its own v7 → v8 → v7 script rather than reuse the harness: 6 states (two of its own, among them a heavy learner and an account still waiting to fold) in web and native mode, 204 checks, all passed. It also ran 14 break tests, and the harness (335 passed, 0 failed).
+- Its verdict was "not safe yet": two blockers and three should-fixes. All five were reproduced before anything was fixed: its break tests failed 9 times on `a3ecc19` (20 passed).
+
+| | Finding | Fix | New test (sabotage) |
+|---|---|---|---|
+| F1 | **Blocker** (rule 11, D7). A second Start fresh inside the 7 days wrote its undo copy over the first one's: erase 2,576 stars, play one lesson, erase again, and the undo brought back 1 star. | `withEarlierUndo`: the new copy holds both, the higher of each, and runs 7 days from the newest erase (D7). | U10 `second_erase_keeps_first`, web and native (`UNDO_OVERWRITES`) |
+| F2 | **Blocker** (rules 2, 11). localStorage refuses the erase and its native write takes over 5 s: she is told "Could not erase", the undo copy is dropped, and the erased state lands anyway, winning the next launch on eraseGen with nothing left to undo. | `eraseNotKept`: her state before the erase is written after the erased one (the mirror writes in order), and the undo copy goes back to what it was (none, or the earlier erase's) only once the native copy reads back as that state. | U11 `failed_erase_stays_undoable`, native (`ERASE_FAIL_DROPS_UNDO`) |
+| F3 | Should-fix (rule 6). After an empty WebView, a launch whose native read failed twice, or that was closed before the read came back, had saved boot defaults to localStorage. The next launch took them as hers, and wrote them over the native copy's settings: Hindi, dark, sound off, guide and Hindi form became English, light, on, none. | `hikmat_native_unmerged` (D10): until a merge that localStorage kept, every launch treats localStorage as missing, so the native copy stays the base. | N10 `settings_survive_unread_native`, native (`NO_UNMERGED_MARK`, a prelude) |
+| F4 | Should-fix (rule 2, review focus 5). A rollback to v7 code and back. (a) v8 Start fresh, then v7 Start fresh and 15 stars earned: back on v8, the native copy's eraseGen 1 won and the 15 stars were lost. (b) v7 Start fresh only: back on v8 all 2,576 erased stars returned. | `nativeCopy` and `hikmat_native_saved` (D9), `adoptOlderErase`: her state stands, and the native copy becomes the undo copy for 7 days. A WebView wiped under v7 takes `hikmat_native_saved` with it, so that case still merges and keeps everything. | R2 `rollback_return_trip` (a, b, and c: v7 loses its data), native (`OLDER_ERASE_IGNORED`) |
+| F5 | Should-fix (rule 7). A file keyed `toString` or `hasOwnProperty` wrote its games onto those built-in functions: `into.progress[ck] || {}` found the inherited member. Nothing of hers was lost. | `_safeKeys` drops every key that `Object.prototype` has. | F8 `bring_ignores_inherited_names`, web and native (`INHERITED_KEYS`) |
+
+The fake bridge gained `fail_gets` (reads that fail) and `slow_next_write` (one write that lands late, with later writes queued behind it), for U11 and N10.
+
+**After the fixes:**
+- The reviewer's break tests pass 29 of 29 on the fixed build (they were 20 and 9), and its round trips 204 of 204.
+- In the harness, each new test passes in its modes, and each fails under its own sabotage in the self-test (52 passed, 0 failed).
+- Two existing checks needed the new behaviour written into them:
+  - **S1 in the app** now starts from a state this build has already saved, so the save it judges is still the one that needs room. The `nativeCopy` mark makes the first save over v7's state 18 bytes longer, so on a phone full to the last byte the boot save is the one that drops the caches, which it may. The first launch on a full v7 phone is the full-storage fixture's own update run.
+  - **F8** brings its seen-question lists in a second file: without the fix, a seen-question list keyed `toString` makes the merge throw (`have.indexOf is not a function`), and what the first file showed must be recorded before that.
+- The gated build: `build.sh` ran the suite on this tree, 347 passed and 0 failed (web and native, self-test included, 703 s), then signed the AAB (SHA-256 `9e158027…`). It passes the AAB checks of Task 7: `jar verified`, the upload key, versionCode 8, the same two permissions as v7, no new intent filter, the three plugins, accounts off. The five fixes are in its `index.html`.
+- On the Android 15 emulator, the real v7 AAB and then this one:
+  - **Update in place:** nothing lost or lowered; `NATIVE_APP` is true, so `window.Capacitor` exists before the game's script runs, and the state carries `nativeCopy` with `hikmat_native_saved` set.
+  - **Save and Bring:** the share sheet showed `bodhya-progress-2026-11-06.json`, and Bring's confirm said 487 stars.
+  - **F1:** two erases with a lesson played between them, a relaunch, then Bring back what I erased: all 490 stars, the gems, level 2 and 41 played lessons came back, and the undo copy left both stores.
+  - **A wiped WebView** on a debug build of the same tree: the native copy brought everything back, the unmerged mark was set and then cleared, and the next launch was the same.
+
+**Notes from the review, not changed in this step:**
+- **The gate tests `hikmat/public/game.html`, while the AAB ships what `bundle-game.js` makes of it** (the cuts, `HIKMAT_BACKEND`), and the harness is offline. The emulator check runs the real bundle, online, and `bundle-game.js` fails loudly if a cut stops matching. Running the harness on `www/index.html` as well is for later.
+- **Rule 12:** no tester saves yet. Internal and closed testing collect them, and the harness must pass on them before v8 goes further.
+- **The web:** for 7 days an undo copy roughly doubles her localStorage, and a phone that was nearly full can then refuse a later save, with nothing native behind it. The web is not deployed in this step, and step 5 revisits it.
+- **`SharedPreferences.apply()`** changes memory before disk, so the read-back proves the write reached the plugin, not the disk. Android finishes pending `apply()` writes when the activity stops, so a normal close keeps them. A kill in the middle can lose the last one, and every save rewrites her whole state.
+- `@capacitor/app` and `@capacitor-community/text-to-speech` have caret ranges in `package.json`; the lockfile pins them. `file_paths.xml`'s `external-path "."` is as in v7 (the provider is not exported, and a share grants only its own file).
+- Found while writing the pages: each day's Save writes a new file into the app's cache, and nothing deletes them, Start fresh included. The pages say so; deleting them is a later change.
 
 ## Not in this step
 

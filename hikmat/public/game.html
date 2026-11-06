@@ -1266,20 +1266,31 @@ window.HIKMAT_ICONS = Object.assign(window.HIKMAT_ICONS || {}, {
    ============================================================ */
 
 // Which saved states this phone held when the app opened, taken before anything can write one.
-// It is the first statement of this script on purpose: the account fold, a boot save or the cache
-// move must not get in first. The launch merge (nativeRestore) needs it, because a WebView whose
-// data was wiped looks, a moment after boot, like a phone with a brand-new profile, and only this
-// tells the two apart. {"hikmat_state_<id>": true when the stored value parses to an object}.
+// These are the first statements of this script on purpose: the account fold, a boot save or the
+// cache move must not get in first. The launch merge (nativeRestore) needs them, because a WebView
+// whose data was wiped looks, a moment after boot, like a phone with a brand-new profile, and only
+// this tells the two apart. {"hikmat_state_<id>": true when the stored value parses to an object}.
+// Taken with it, for the launch merge as well (each is explained where nativeRestore uses it):
+//   BOOT_MARKED        the states that carry nativeCopy, which only this build writes (save());
+//   BOOT_NATIVE_SAVED  this storage has held such a state since its data was last wiped;
+//   BOOT_UNMERGED      the state key a launch began without, whose native copy no launch has
+//                      merged since.
+const NATIVE_APP = !!window.Capacitor;
+const BOOT_MARKED = {};
+let BOOT_NATIVE_SAVED = false, BOOT_UNMERGED = null;
 const BOOT_STATE = (function(){
   const out = {};
   try {
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
       if(!k || k.indexOf("hikmat_state_") !== 0) continue;
-      let ok = false;
-      try { const v = JSON.parse(localStorage.getItem(k)); ok = !!v && typeof v === "object" && !Array.isArray(v); } catch(e){}
+      let ok = false, v = null;
+      try { v = JSON.parse(localStorage.getItem(k)); ok = !!v && typeof v === "object" && !Array.isArray(v); } catch(e){}
       out[k] = ok;
+      if(ok && v.nativeCopy === true) BOOT_MARKED[k] = true;
     }
+    BOOT_NATIVE_SAVED = localStorage.getItem("hikmat_native_saved") === "1";
+    BOOT_UNMERGED = localStorage.getItem("hikmat_native_unmerged");
   } catch(e){}
   return out;
 })();
@@ -1998,6 +2009,12 @@ const contentReady = (async function(){
 // These are `let`s declared above save(), because save() can run during boot, and a `let` further
 // down this file would still be in its temporal dead zone then.
 let _mirrorOpen = false, _mirrorPending = null, _mirrorBusy = null, _mirrorLast = null;
+// Once per storage, after the first state this build wrote there was kept (BOOT_NATIVE_SAVED).
+let _nativeSavedNoted = false;
+function noteNativeSaved(){
+  if(!NATIVE_APP || _nativeSavedNoted || BOOT_NATIVE_SAVED) return;
+  try { localStorage.setItem("hikmat_native_saved", "1"); _nativeSavedNoted = true; } catch(e){}
+}
 function nativePrefs(){
   const P = capPlugin("Preferences");
   return P && typeof P.get === "function" && typeof P.set === "function" ? P : null;
@@ -2043,8 +2060,13 @@ async function mirrorNow(key, json){
 // of it, since every save writes her whole state.
 function save(){
   dropLevelCache();
+  // nativeCopy marks a state as written by a build that keeps the native copy. v7 carries the field
+  // along on its own saves, but its Start fresh builds a new state without it, and that is how the
+  // next launch of this build tells an erase there from a save that only missed (adoptOlderErase).
+  if(NATIVE_APP) state.nativeCopy = true;
   const key = stateKey(), json = JSON.stringify(state);
   const kept = writeLocal(key, json);
+  if(kept) noteNativeSaved();
   // Start fresh while an account fold waited for room (eraseWaitingFold): the fold ends with the
   // first save that lands, because that save is the one that holds the guide and Hindi form she
   // took from the account. Until then hikmat_current can be the only copy of both.
@@ -2168,7 +2190,8 @@ function retireAccounts(){
     // repeat: the guest profile never took this fold, so the next one counts each attempt once.
     // Dropping hikmat_current after a write that failed, as this used to do without knowing,
     // left her account's stars in a key that no screen reads.
-    if(writeLocal(stateKeyFor(null), JSON.stringify(merged))) endAccountFold();
+    if(NATIVE_APP) merged.nativeCopy = true;           // as save() marks every state it writes
+    if(writeLocal(stateKeyFor(null), JSON.stringify(merged))){ endAccountFold(); noteNativeSaved(); }
     // This launch runs as the device profile either way. With accounts off there is no other
     // identity: an account left in memory would load and save that account's own key, and
     // refill the token-signed queues this function has just emptied. Nor does it run on `merged`
@@ -2239,7 +2262,49 @@ function withBootDefaults(st){
 
 // True when localStorage held no readable state for this profile as the app opened. Taken from
 // BOOT_STATE, so the fold or a boot save that has written one since cannot hide that.
-const localWasMissing = !BOOT_STATE[stateKey()];
+// It also holds on the launches after one that began that way and never merged the native copy,
+// because its read failed or the app was closed before the read came back. That launch wrote boot
+// defaults to localStorage, and taken as hers they would beat the settings in the native copy and
+// then overwrite them there too. So such a launch leaves a mark, hikmat_native_unmerged, and only a
+// merge that localStorage kept removes it. In the app only: on the web there is no native copy.
+const localWasMissing = !BOOT_STATE[stateKey()] || BOOT_UNMERGED === stateKey();
+if(localWasMissing && NATIVE_APP && BOOT_UNMERGED !== stateKey()){
+  try { localStorage.setItem("hikmat_native_unmerged", stateKey()); } catch(e){}
+}
+
+// An older build rebuilt localStorage after this one had saved there: her state no longer carries
+// nativeCopy (BOOT_MARKED), although this storage has held one that did (BOOT_NATIVE_SAVED), and the
+// native copy still does. Only a build that keeps no native copy writes a state without the mark,
+// and v7 builds a new one in one place, its Start fresh. A save it only missed leaves the marked
+// state in place, and a wiped WebView takes BOOT_NATIVE_SAVED with it, so neither ends up here.
+// That erase was hers, so localStorage stands, and the native copy, which still holds what she
+// erased, becomes the undo copy for 7 days, as a Start fresh in this build would have made it.
+// The usual merge would instead bring back every star she erased there, or, after an erase in this
+// build, let the native copy's higher eraseGen throw away everything she has earned since.
+// True once the undo copy is stored, or there was nothing to keep. False when it could be stored
+// nowhere: the usual merge then runs, and what she erased comes back, but nothing is lost.
+// It runs inside nativeRestore, before the mirror opens, so it writes the native side itself.
+async function adoptOlderErase(P, other){
+  if(hasProgress(other)){
+    const now = Date.now();
+    const u = { kind:"bodhya-erase-undo", v:1, erasedAt: now, until: now + UNDO_DAYS * DAY_MS,
+                state: JSON.parse(JSON.stringify(other)) };
+    let prev = null;
+    try { prev = JSON.parse(localStorage.getItem(undoKey())); } catch(e){}
+    if(!_validUndo(prev)){ prev = null; try { const r = await P.get({ key: undoKey() }); prev = JSON.parse(r && r.value); } catch(e){} }
+    if(!_validUndo(prev) || now > prev.until) prev = null;
+    const uj = JSON.stringify(withEarlierUndo(u, prev));
+    let stored = writeLocal(undoKey(), uj);
+    try {
+      await P.set({ key: undoKey(), value: uj });
+      const r = await P.get({ key: undoKey() });
+      stored = (!!r && r.value === uj) || stored;
+    } catch(e){}
+    if(!stored) return false;
+  }
+  state.eraseGen = Math.max(eraseGenOf(state), eraseGenOf(other)) + 1;
+  return true;
+}
 
 // Rules 2 and 6 at launch: read the native copy, merge it with localStorage's (mergeCopy), then
 // open the mirror gate and write the merged state to both. Writing both also seeds a native copy
@@ -2263,10 +2328,12 @@ const nativeRestore = (async function(){
   let other = null;
   try { const v = JSON.parse(got && got.value); if(v && typeof v === "object" && !Array.isArray(v)) other = v; } catch(e){}
   const before = JSON.stringify(state);
-  const merged = mergeCopy(state, other, localWasMissing);
+  const olderErase = !!other && other.nativeCopy === true && !localWasMissing && !BOOT_MARKED[key]
+                     && BOOT_NATIVE_SAVED && await adoptOlderErase(P, other);
+  const merged = olderErase ? state : mergeCopy(state, other, localWasMissing);
   if(merged !== state) state = withBootDefaults(merged);
   _mirrorOpen = true;
-  save();
+  if(save() && localWasMissing){ try { localStorage.removeItem("hikmat_native_unmerged"); } catch(e){} }
   const changed = JSON.stringify(state) !== before;
   if(changed){
     // As the theme and language toggles do: the top bar, then the screen she is on.
@@ -3975,8 +4042,11 @@ function progressFileText(st){
   return JSON.stringify({ kind:"bodhya-progress", v:1, app:"net.bodhya.learn", savedAt:new Date().toISOString(), state:st });
 }
 function _isObj(x){ return !!x && typeof x === "object" && !Array.isArray(x); }
-// A file is not trusted: only plain keys of a sane length, never the ones that reach a prototype.
-function _safeKeys(o){ return _isObj(o) ? Object.keys(o).filter(k => k.length > 0 && k.length <= 140 && !UNSAFE_KEYS.has(k)) : []; }
+// A file is not trusted: only plain keys of a sane length, never the ones that reach a prototype,
+// and never the name of anything every object inherits ("toString", "hasOwnProperty", ...). The
+// merge reads `into.progress[ck] || {}`, so under such a name it would find the built-in function
+// and write the file's games onto it, for every object in the game to share.
+function _safeKeys(o){ return _isObj(o) ? Object.keys(o).filter(k => k.length > 0 && k.length <= 140 && !UNSAFE_KEYS.has(k) && !(k in Object.prototype)) : []; }
 function _int(x, lo, hi){ return typeof x === "number" && isFinite(x) ? Math.min(hi, Math.max(lo, Math.round(x))) : null; }
 // Only the fields the game knows, each in the shape it expects; anything else is left behind.
 // A setting the file does not hold validly is absent, so D5 can never apply a default as hers.
@@ -4175,6 +4245,16 @@ function undoCopyOf(st){
   if(acct && acct.id) u.fold = { id: String(acct.id), gender: acct.gender, mascot: acct.mascot };
   return u;
 }
+// A second Start fresh inside the 7 days must not throw away the first one's undo copy, or the
+// stars of the first erase are gone for good days before she was told. So the new copy holds both,
+// the higher of each, as one restore would bring them back, and runs 7 days from the newest erase.
+function withEarlierUndo(u, prev){
+  if(!prev) return u;
+  u.state = mergeSavedState(JSON.parse(JSON.stringify(u.state)), JSON.parse(JSON.stringify(prev.state)), { sameLearner:true });
+  if(!u.fold && prev.fold) u.fold = prev.fold;
+  return u;
+}
+async function putUndo(json){ writeLocal(undoKey(), json); await _nativePut(undoKey(), json); }
 // Her state with the undo copy brought back: her current settings and everything earned since
 // the erase stay, every erased star returns, and eraseGen goes one above both copies, so no copy
 // from before the restore (the erased one, say, in a native store that lost a write) can win.
@@ -4193,7 +4273,8 @@ function mergeRestore(cur, u){
 // changed.
 async function eraseProgress(){
   const before = state, foldWaitedBefore = endFoldWhenKept;
-  const uj = JSON.stringify(undoCopyOf(before));
+  const prev = await readUndo();
+  const uj = JSON.stringify(withEarlierUndo(undoCopyOf(before), prev));
   const localUndo = writeLocal(undoKey(), uj);
   const nativeUndo = await _withTimeout(_nativePut(undoKey(), uj), 5000, false);
   if(!localUndo && !nativeUndo) return false;
@@ -4210,14 +4291,21 @@ async function eraseProgress(){
   const kept = save();
   // The native copy counts only once it reads back as the erased state.
   const mirrored = await _withTimeout(mirrorNow(stateKey(), JSON.stringify(state)), 5000, false);
-  if(!kept && !mirrored){
-    // Neither copy took it, so nothing was erased, and keeping the erase in memory would store it
-    // later with some other save, after she was told it had not happened.
-    state = before; endFoldWhenKept = foldWaitedBefore;
-    await dropUndo();
-    return false;
-  }
+  if(!kept && !mirrored){ await eraseNotKept(before, foldWaitedBefore, prev); return false; }
   return true;
+}
+// Neither copy confirmed the erase, so she is told it failed, and her state goes back: kept in
+// memory, the erase would be stored later with some other save, after she was told it had not
+// happened. But the erased state may still reach the native copy. A native write cannot be called
+// back, and the one above may only have been slow; landing later, its higher eraseGen would win
+// the next launch with nothing left to undo it. So her state before the erase is written after it,
+// and the undo copy goes back to what it was (none, or the earlier erase's) only once the native
+// copy reads back as that state. Until then it stays, so an erase that does land can be undone.
+async function eraseNotKept(before, foldWaitedBefore, prev){
+  state = before; endFoldWhenKept = foldWaitedBefore;
+  const settled = !_mirrorOpen || await _withTimeout(mirrorNow(stateKey(), JSON.stringify(before)), 5000, false);
+  if(!settled) return;
+  if(prev) await putUndo(JSON.stringify(prev)); else await dropUndo();
 }
 // {ok, stars} once the restore is kept and the undo copy gone; {ok:false, error} otherwise, and
 // nothing changed.
