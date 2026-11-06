@@ -419,8 +419,9 @@ Tests that replay real saves through the update must prove that no star total dr
   4. Bring that file. It merges.
   5. Erase, then undo.
   6. On a debug build: `run-as … rm -rf app_webview`, then relaunch. The stars come back from the mirror.
-- [ ] **Closed testing first.**
-  - Vishal uploads v8 to the closed testing track only.
+- [ ] **Internal testing first, then closed testing** (changed 6 Nov).
+  - Vishal uploads v8 to the internal testing track, for his own phone and 2 or 3 tester phones, and promotes the same release to closed testing only after they pass.
+  - The receiving phone starts from a fresh install (and Clear data, against a backup restore), so its stars after Bring must equal the file's stars exactly.
   - `v8-closed-test-check.md` asks 2 or 3 tester phones to note the My progress numbers before updating, check after updating that they are the same or higher and that played lessons are open, then Save my progress and send the file, with a parent's OK.
   - Those files go into `tests/saves/private/`, and the harness must pass on them before v8 goes anywhere else.
 - [ ] **The WhatsApp hop (F7) on two real tester phones.** Save on phone A, send the file over WhatsApp, and bring it in on phone B through the in-app picker. Note how many taps the picker takes to reach it, and whether it shows under Recent or Documents.
