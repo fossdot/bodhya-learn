@@ -1,0 +1,12 @@
+{
+  "appId": "net.bodhya.learn",
+  "appName": "Bodhya",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

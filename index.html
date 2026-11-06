@@ -639,6 +639,12 @@
   .btn.danger { background:#fff; color:#b91c1c; box-shadow:var(--shadow-sm); }
   .btn.danger:hover { color:#991b1b; }
   [data-theme="dark"] .btn.danger { background:#2a1d24; color:#fca5a5; }
+  /* Erase on the Start fresh confirm sheet (Figma 23:244): the same quiet red, outlined, so it
+     reads as a choice and never as the main button. Keep it, below it, is the main button. */
+  .btn.danger.outline { box-shadow:none; border:2px solid currentColor; }
+  /* Navy on the saffron gradient, as Figma draws Keep it: 6.1:1 to 8.3:1 across the gradient,
+     where white is 2.0:1 to 2.7:1. Used by the sheets added in v8; the rest keep white for now. */
+  .btn.primary.ink { color:#1a1b3a; }
   .profileface { font-size:44px; line-height:1; }
   .bandpick { display:flex; flex-wrap:wrap; gap:8px; }
   .bandchip { display:inline-flex; align-items:center; gap:6px; background:#fff; border:2px solid var(--line); border-radius:14px; padding:8px 13px; font-weight:800; font-size:14px; cursor:pointer; color:var(--ink); box-shadow:var(--shadow-sm); }
@@ -1259,6 +1265,36 @@ window.HIKMAT_ICONS = Object.assign(window.HIKMAT_ICONS || {}, {
    speech (English + Hindi) and localStorage for progress.
    ============================================================ */
 
+// Which saved states this phone held when the app opened, taken before anything can write one.
+// These are the first statements of this script on purpose: the account fold, a boot save or the
+// cache move must not get in first. The launch merge (nativeRestore) needs them, because a WebView
+// whose data was wiped looks, a moment after boot, like a phone with a brand-new profile, and only
+// this tells the two apart. {"hikmat_state_<id>": true when the stored value parses to an object}.
+// Taken with it, for the launch merge as well (each is explained where nativeRestore uses it):
+//   BOOT_MARKED        the states that carry nativeCopy, which only this build writes (save());
+//   BOOT_NATIVE_SAVED  this storage has held such a state since its data was last wiped;
+//   BOOT_UNMERGED      the state key a launch began without, whose native copy no launch has
+//                      merged since.
+const NATIVE_APP = !!window.Capacitor;
+const BOOT_MARKED = {};
+let BOOT_NATIVE_SAVED = false, BOOT_UNMERGED = null;
+const BOOT_STATE = (function(){
+  const out = {};
+  try {
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || k.indexOf("hikmat_state_") !== 0) continue;
+      let ok = false, v = null;
+      try { v = JSON.parse(localStorage.getItem(k)); ok = !!v && typeof v === "object" && !Array.isArray(v); } catch(e){}
+      out[k] = ok;
+      if(ok && v.nativeCopy === true) BOOT_MARKED[k] = true;
+    }
+    BOOT_NATIVE_SAVED = localStorage.getItem("hikmat_native_saved") === "1";
+    BOOT_UNMERGED = localStorage.getItem("hikmat_native_unmerged");
+  } catch(e){}
+  return out;
+})();
+
 // ---------- App-level settings (an admin dashboard / backend will manage these) ----------
 const SETTINGS = {
   appName: "Bodhya Learn",
@@ -1852,13 +1888,204 @@ function loadState(){
 // Declared here, ABOVE its first caller: save() drops this cache, and a `let` further down the
 // file would leave it in the temporal dead zone for any save() during boot.
 let _lvCache = {};        // per-level rollup memo — see dropLevelCache / levelStars / levelPool
-function save(){ dropLevelCache(); localStorage.setItem(stateKey(), JSON.stringify(state)); }
+
+// Rule 4 of docs/progress-logic.md: guard every write. A full localStorage makes setItem throw,
+// and a save that throws keeps nothing. The stars of the game she has just finished are gone,
+// and the game stops wherever the throw left it. Her progress can share this storage with three
+// content caches: a build before v8 kept them here, and they stay here wherever IndexedDB will
+// not take them (see contentStore below). All three can be rebuilt: the lessons and the test bank
+// from the bundled curriculum.json and testbank.json, the grade bands from the defaults at the top of this file,
+// and all of them from the server whenever it answers. So when a write does not fit, the caches
+// go and the write is tried once more. Nothing else is ever removed to make room: not a saved
+// state, not a setting, and not a key this build does not know.
+function writeLocal(key, json){
+  try { localStorage.setItem(key, json); return true; } catch(e){}
+  // Any throw counts as full. Chromium calls it QuotaExceededError, other engines name it their
+  // own way, and whatever the reason, the room the caches hold is the only room there is to try.
+  dropContentCaches();
+  try { localStorage.setItem(key, json); return true; } catch(e){ return false; }
+}
+// The three cache keys are spelled out here rather than read from CACHE_KEY, STRUCT_KEY and
+// TESTBANK_KEY. retireAccounts() writes through writeLocal() before those constants are declared
+// further down this file, and reading a const before its declaration throws.
+function dropContentCaches(){
+  ["hikmat_courses_cache", "hikmat_structure_cache", "hikmat_testbank_cache"].forEach(k => {
+    try { localStorage.removeItem(k); } catch(e){}
+  });
+}
+// Rule 5 of docs/progress-logic.md: content caches never share her progress's space. The lessons,
+// the grade structure and the test bank are about 2 MB, and in localStorage they sat in the same
+// few megabytes as her stars, which is how a full phone came to refuse her saves. They live in
+// IndexedDB instead: database hikmat_content, store kv, keyed by the old localStorage names, values
+// stored as the parsed objects. Nothing else uses that database. Where IndexedDB is missing or
+// will not open, everything falls back to localStorage as before, through writeLocal(), so the
+// game works exactly as it did. Every method resolves; none rejects.
+const contentStore = (function(){
+  let dbp = null;
+  function db(){
+    if(!dbp) dbp = new Promise(resolve => {
+      try {
+        const rq = indexedDB.open("hikmat_content", 1);
+        rq.onupgradeneeded = () => { try { rq.result.createObjectStore("kv"); } catch(e){} };
+        rq.onsuccess = () => resolve(rq.result);
+        rq.onerror = () => resolve(null);
+        rq.onblocked = () => resolve(null);
+      } catch(e){ resolve(null); }
+    });
+    return dbp;
+  }
+  // True only once the write is committed, so a caller may act on it (the move below does).
+  function idbSet(key, value){
+    return db().then(d => new Promise(resolve => {
+      if(!d) return resolve(false);
+      try {
+        const tx = d.transaction("kv", "readwrite");
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = tx.onabort = () => resolve(false);
+        tx.objectStore("kv").put(value, key);
+      } catch(e){ resolve(false); }
+    }));
+  }
+  function idbGet(key){
+    return db().then(d => new Promise(resolve => {
+      if(!d) return resolve(undefined);
+      try {
+        const rq = d.transaction("kv", "readonly").objectStore("kv").get(key);
+        rq.onsuccess = () => resolve(rq.result);
+        rq.onerror = () => resolve(undefined);
+      } catch(e){ resolve(undefined); }
+    }));
+  }
+  function localGet(key){
+    try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? null : v; } catch(e){ return null; }
+  }
+  return {
+    idbSet,
+    // IndexedDB first. localStorage after it, for a cache the move could not take: IndexedDB
+    // missing, or refusing writes.
+    get(key){ return idbGet(key).then(v => v != null ? v : localGet(key)); },
+    // A cache that will not go into IndexedDB goes where it always went, so it is not lost. The
+    // value is copied through JSON at once, as the localStorage write always did: the put happens
+    // only after the database opens, and the copy keeps a later change to COURSES out of the cache.
+    set(key, value){
+      let json; try { json = JSON.stringify(value); } catch(e){ return Promise.resolve(false); }
+      return idbSet(key, JSON.parse(json)).then(ok => {
+        if(ok){ try { localStorage.removeItem(key); } catch(e){} return true; }
+        return writeLocal(key, json);
+      });
+    },
+  };
+})();
+// Moves each of the three caches out of localStorage once. Each one is parsed and written to
+// IndexedDB, and only after IndexedDB has committed it is it removed from localStorage, so a move
+// that fails halfway leaves the cache where it was. One that will not parse is removed: it is
+// useless, and like any of these three it is rebuilt from the bundled files or the server. Every
+// read of a cache awaits this first. hikmat_settings_cache is small and stays in localStorage.
+const contentReady = (async function(){
+  for(const key of ["hikmat_courses_cache", "hikmat_structure_cache", "hikmat_testbank_cache"]){
+    let raw = null;
+    try { raw = localStorage.getItem(key); } catch(e){}
+    if(raw == null) continue;
+    let value = null;
+    try { value = JSON.parse(raw); } catch(e){}
+    if(value == null){ try { localStorage.removeItem(key); } catch(e){} continue; }
+    if(await contentStore.idbSet(key, value)){ try { localStorage.removeItem(key); } catch(e){} }
+  }
+})();
+// Rule 6 keeps a second copy of every save outside the WebView: Capacitor Preferences, which
+// Android keeps in shared_prefs/CapacitorStorage.xml. A WebView can come back empty (its data
+// cleared, a broken update, a reinstall that restored only some files); that file does not go
+// with it, and the launch merge (nativeRestore) brings her progress back from it. save() calls
+// mirrorState for every save, the refused ones too, because on a full phone the second copy is
+// the only place a refused save can still go.
+//
+// The gate. Nothing is written to the native copy until the launch has READ it. A save at boot
+// (the account fold, the server's defaults, a first-launch screen) on a phone whose WebView came
+// back empty would otherwise overwrite the only copy of her progress with an empty profile a moment
+// before the launch looked at it. Until the gate opens, mirrorState only remembers the latest
+// call. Once it is open, at most one write is in flight and the latest one wins: every save holds
+// her whole state, so a write that is overtaken loses nothing. On the web there is no native
+// copy, and the gate never opens.
+// These are `let`s declared above save(), because save() can run during boot, and a `let` further
+// down this file would still be in its temporal dead zone then.
+let _mirrorOpen = false, _mirrorPending = null, _mirrorBusy = null, _mirrorLast = null;
+// Once per storage, after the first state this build wrote there was kept (BOOT_NATIVE_SAVED).
+let _nativeSavedNoted = false;
+function noteNativeSaved(){
+  if(!NATIVE_APP || _nativeSavedNoted || BOOT_NATIVE_SAVED) return;
+  try { localStorage.setItem("hikmat_native_saved", "1"); _nativeSavedNoted = true; } catch(e){}
+}
+function nativePrefs(){
+  const P = capPlugin("Preferences");
+  return P && typeof P.get === "function" && typeof P.set === "function" ? P : null;
+}
+function mirrorState(key, json){
+  _mirrorPending = { key, json };
+  if(_mirrorOpen) _mirrorPump();
+}
+function _mirrorPump(){
+  if(_mirrorBusy) return _mirrorBusy;
+  const job = _mirrorPending;
+  if(!job) return Promise.resolve();
+  _mirrorPending = null;
+  const P = nativePrefs();
+  let w;
+  try { w = P ? Promise.resolve(P.set({ key: job.key, value: job.json })).then(() => true, () => false) : Promise.resolve(false); }
+  catch(e){ w = Promise.resolve(false); }
+  _mirrorBusy = w.then(ok => {
+    _mirrorLast = { key: job.key, json: job.json, ok };
+    _mirrorBusy = null;
+    if(_mirrorPending && _mirrorOpen) _mirrorPump();
+  });
+  return _mirrorBusy;
+}
+// For the writes she is told about (Start fresh, and the undo in Task 6): resolves true only once
+// the native copy has been read back and holds this state or a later save of it. A write can
+// resolve and still be lost, so the read-back is what counts. False on the web, where there is
+// no native copy, and whenever the launch could not read it (the gate stays shut).
+async function mirrorNow(key, json){
+  try { await nativeRestore; } catch(e){}
+  if(!_mirrorOpen) return false;
+  mirrorState(key, json);
+  while(_mirrorBusy || _mirrorPending) await _mirrorPump();
+  const last = _mirrorLast;
+  if(!last || last.key !== key || !last.ok) return false;
+  try {
+    const r = await nativePrefs().get({ key });
+    return !!r && r.value === last.json;
+  } catch(e){ return false; }
+}
+// Returns true when localStorage kept it. A false save is not an error she ever sees: the state
+// in memory still holds everything, the game carries on, and the next save that fits writes all
+// of it, since every save writes her whole state.
+function save(){
+  dropLevelCache();
+  // nativeCopy marks a state as written by a build that keeps the native copy. v7 carries the field
+  // along on its own saves, but its Start fresh builds a new state without it, and that is how the
+  // next launch of this build tells an erase there from a save that only missed (adoptOlderErase).
+  if(NATIVE_APP) state.nativeCopy = true;
+  const key = stateKey(), json = JSON.stringify(state);
+  const kept = writeLocal(key, json);
+  if(kept) noteNativeSaved();
+  // Start fresh while an account fold waited for room (eraseWaitingFold): the fold ends with the
+  // first save that lands, because that save is the one that holds the guide and Hindi form she
+  // took from the account. Until then hikmat_current can be the only copy of both.
+  if(kept && endFoldWhenKept){ endFoldWhenKept = false; endAccountFold(); }
+  mirrorState(key, json);
+  return kept;
+}
 
 // Fold one saved state into another, taking the BETTER of each value — never the newer one.
 // Stars and gems only ever go up in this game, and a merge that could lower either would be a
 // child watching her own work get smaller.
-function mergeSavedState(into, from){
+//
+// opts.sameLearner: both are copies of the SAME learner (her localStorage and her native copy,
+// or a progress file she saved). Each attempt is then in both, so attempts take the higher count
+// instead of adding up, and merging her with herself changes nothing. Without it the two are
+// different learners (the account fold), and their attempts add up as they always did.
+function mergeSavedState(into, from, opts){
   if(!from) return into;
+  const same = !!(opts && opts.sameLearner);
   into.progress = into.progress || {};
   const p = from.progress || {};
   for(const ck in p) for(const lk in p[ck]) for(const aid in p[ck][lk]){
@@ -1873,7 +2100,8 @@ function mergeSavedState(into, from){
     const a = into.levelTests[n] || { passed:false, bestPct:0, attempts:0 }, b = tp[n] || {};
     into.levelTests[n] = { passed: !!(a.passed || b.passed),
                            bestPct: Math.max(a.bestPct || 0, b.bestPct || 0),
-                           attempts: (a.attempts || 0) + (b.attempts || 0) };
+                           attempts: same ? Math.max(a.attempts || 0, b.attempts || 0)
+                                          : (a.attempts || 0) + (b.attempts || 0) };
   }
   // The seen-question lists are what stop a retake serving the same paper twice, so they union
   // rather than replace — dropping either side would hand her questions she has already answered.
@@ -1890,9 +2118,35 @@ function mergeSavedState(into, from){
   return into;
 }
 
+// Rule 2 for her two copies, localStorage (`local`) and the native one (`other`), at launch.
+// eraseGen counts her erases (Start fresh adds 1), so it decides first: the copy with the higher
+// eraseGen is the one after an erase, and it wins outright. Merged into, the older copy would
+// bring back every star she erased. That holds even when localStorage held nothing at boot:
+// whatever it holds by now came from this boot (an account fold landing on the first launch
+// with room, say), and that is older than an erase the native copy has already seen.
+// With equal eraseGen, both copies are her and the higher of each value wins. Which one is the
+// base, whose settings stand, depends on `localWasMissing`: a WebView that came back empty has
+// only boot defaults, so the native copy is the base and her settings come from it.
+function eraseGenOf(st){ const g = st && st.eraseGen; return typeof g === "number" && isFinite(g) && g > 0 ? Math.floor(g) : 0; }
+function mergeCopy(local, other, localWasMissing){
+  if(!other || typeof other !== "object") return local;
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const gl = eraseGenOf(local), go = eraseGenOf(other);
+  if(gl > go) return local;
+  if(go > gl) return clone(other);
+  if(localWasMissing){
+    const m = mergeSavedState(clone(other), local, { sameLearner:true });
+    return carryMascotAndGender(m, local);
+  }
+  return mergeSavedState(clone(local), other, { sameLearner:true });
+}
+
 // A device that was signed in when accounts were switched off must not look wiped on the next
-// launch. This runs ONCE, before any state is loaded, and folds the signed-in learner's progress
-// into the anonymous device profile she is about to become.
+// launch. This runs before any state is loaded, and folds the signed-in learner's progress into
+// the anonymous device profile she is about to become. The fold lands on the first launch unless
+// storage is too full for it even after the caches and the queues below have gone. Then
+// hikmat_current stays and every later launch tries again. Until one has room she plays as the
+// device profile without the account's stars, which wait untouched in the account's own key.
 //
 // Her old `hikmat_state_<id>` key is deliberately left where it is. Nothing here destroys a
 // star: if accounts ever come back, logging in finds every one of them exactly where she left
@@ -1908,23 +2162,13 @@ function mergeSavedState(into, from){
 //     not sit on a shared phone forever. This mirrors the Boli cleanup at the bottom of the file.
 function retireAccounts(){
   if(AUTH_ENABLED) return;
-  const drop = ["hikmat_social_pending",
-                "hikmat_attempt_queue", "hikmat_test_queue", "hikmat_event_queue",
-                "hikmat_doubt_queue", "hikmat_att_queue"];
-  if(currentStudent){
-    let mine = null, device = null;
-    try { mine = JSON.parse(localStorage.getItem(stateKeyFor(currentStudent.id))); } catch(e){}
-    try { device = JSON.parse(localStorage.getItem(stateKeyFor(null))); } catch(e){}
-    const merged = mergeSavedState(device || {}, mine);
-    // Her guide and the way Hindi addresses her belong to HER, not to the account — carry them
-    // across, or she is greeted by a different friend on the first launch after the update.
-    if(!merged.gender && currentStudent.gender) merged.gender = currentStudent.gender;
-    if(!merged.mascot && currentStudent.mascot) merged.mascot = currentStudent.mascot;
-    try { localStorage.setItem(stateKeyFor(null), JSON.stringify(merged)); } catch(e){}
-    currentStudent = null;
-    drop.push("hikmat_current");
-  }
-  drop.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+  // These go before the fold is written, so the room they held is there for it. A phone that
+  // stayed signed in through months offline can be full of its own unsent queues, and a fold
+  // tried first fails for want of the room this function frees a moment later. They go whether
+  // or not there is an account to fold, so going first removes nothing that used to stay.
+  ["hikmat_social_pending",
+   "hikmat_attempt_queue", "hikmat_test_queue", "hikmat_event_queue",
+   "hikmat_doubt_queue", "hikmat_att_queue"].forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
   // Campus-roster keys by prefix rather than by name: the two constants that used to name them
   // (CAMPUS_ROSTER_KEY / DEVICE_MODE_KEY) are no longer defined anywhere in this file, so an
   // older build's roster can only be found by looking for it.
@@ -1936,10 +2180,170 @@ function retireAccounts(){
     }
     kill.forEach(k => localStorage.removeItem(k));
   } catch(e){}
+  if(currentStudent){
+    let mine = null, device = null;
+    try { mine = JSON.parse(localStorage.getItem(stateKeyFor(currentStudent.id))); } catch(e){}
+    try { device = JSON.parse(localStorage.getItem(stateKeyFor(null))); } catch(e){}
+    const merged = carryMascotAndGender(mergeSavedState(device || {}, mine), currentStudent);
+    // The fold is her progress, so it goes through writeLocal() like every save. If even that
+    // cannot make room, hikmat_current stays, and the next launch folds again. That is safe to
+    // repeat: the guest profile never took this fold, so the next one counts each attempt once.
+    // Dropping hikmat_current after a write that failed, as this used to do without knowing,
+    // left her account's stars in a key that no screen reads.
+    if(NATIVE_APP) merged.nativeCopy = true;           // as save() marks every state it writes
+    if(writeLocal(stateKeyFor(null), JSON.stringify(merged))){ endAccountFold(); noteNativeSaved(); }
+    // This launch runs as the device profile either way. With accounts off there is no other
+    // identity: an account left in memory would load and save that account's own key, and
+    // refill the token-signed queues this function has just emptied. Nor does it run on `merged`
+    // while the fold waits. Every save would then be as large as the fold that did not fit, and
+    // on a phone with a little room left the stars she earns now would not be kept.
+    currentStudent = null;
+  }
+}
+// Her guide and the way Hindi addresses her belong to HER, not to the account. The fold carries
+// them into the device profile, or she is greeted by a different friend on the first launch after
+// the update. Where the device profile already has its own, that one stays. The fold takes them
+// from hikmat_current, and that can be the only copy this phone has: the account's own key holds
+// them only when the build she signed in with saved them there too.
+function carryMascotAndGender(into, acct){
+  if(acct && !into.gender && acct.gender) into.gender = acct.gender;
+  if(acct && !into.mascot && acct.mascot) into.mascot = acct.mascot;
+  return into;
+}
+// The account whose fold is still waiting for room, or null. With accounts off, retireAccounts()
+// leaves hikmat_current in storage only while its fold has not landed. It is read the way the
+// top of this section reads it, so a fold waits here exactly when the next launch would fold.
+function waitingAccount(){
+  if(AUTH_ENABLED) return null;
+  try { return JSON.parse(localStorage.getItem("hikmat_current")) || null; } catch(e){ return null; }
+}
+// Start fresh erases every star on this phone, and a fold still waiting for room holds some of
+// them. Left waiting, it would land on the next launch with room, inside the profile she has just
+// erased. So the erase takes the fold with it, and leaves what a fold that landed before the erase
+// would have left: the erased profile, with the guide and Hindi form the fold carries, and the
+// account's own key untouched. `into` is the erased state, before it is saved. hikmat_current goes
+// with the first save that lands (see save()), never before: until then it can be the only copy
+// of that guide and Hindi form. If localStorage refuses every save until she closes the app,
+// nothing of the erase was stored, the fold still waits, and the phone is as it was before it.
+let endFoldWhenKept = false;
+function eraseWaitingFold(into){
+  const acct = waitingAccount();
+  if(!acct) return;
+  carryMascotAndGender(into, acct);
+  endFoldWhenKept = true;
+}
+// The one place hikmat_current goes while accounts are off. While it is there, the fold above
+// has not landed. It goes once the fold lands, or once an erase that took the fold with it is
+// stored. The account's own key stays either way. With accounts on, hikmat_current is whoever
+// is signed in, and erasing her progress must not sign her out.
+function endAccountFold(){
+  if(AUTH_ENABLED) return;
+  try { localStorage.removeItem("hikmat_current"); } catch(e){}
 }
 retireAccounts();          // before loadState(): it decides WHICH state we are about to load
 
 let state = loadState();
+
+// The defaults a loaded state gets at boot (see the boot section at the end of this file), for a
+// state the launch merge puts in its place.
+function withBootDefaults(st){
+  st.progress = st.progress || {};
+  st.hindi = false;
+  st.lang = st.lang || "en";
+  st.sound = st.sound !== false;
+  st.theme = st.theme || "light";
+  st.testSeen = st.testSeen || {};
+  st.levelTests = st.levelTests || {};
+  st.videosSeen = st.videosSeen || {};
+  st.lastLoc = st.lastLoc || {};
+  st.seenTypes = st.seenTypes || {};
+  return st;
+}
+
+// True when localStorage held no readable state for this profile as the app opened. Taken from
+// BOOT_STATE, so the fold or a boot save that has written one since cannot hide that.
+// It also holds on the launches after one that began that way and never merged the native copy,
+// because its read failed or the app was closed before the read came back. That launch wrote boot
+// defaults to localStorage, and taken as hers they would beat the settings in the native copy and
+// then overwrite them there too. So such a launch leaves a mark, hikmat_native_unmerged, and only a
+// merge that localStorage kept removes it. In the app only: on the web there is no native copy.
+const localWasMissing = !BOOT_STATE[stateKey()] || BOOT_UNMERGED === stateKey();
+if(localWasMissing && NATIVE_APP && BOOT_UNMERGED !== stateKey()){
+  try { localStorage.setItem("hikmat_native_unmerged", stateKey()); } catch(e){}
+}
+
+// An older build rebuilt localStorage after this one had saved there: her state no longer carries
+// nativeCopy (BOOT_MARKED), although this storage has held one that did (BOOT_NATIVE_SAVED), and the
+// native copy still does. Only a build that keeps no native copy writes a state without the mark,
+// and v7 builds a new one in one place, its Start fresh. A save it only missed leaves the marked
+// state in place, and a wiped WebView takes BOOT_NATIVE_SAVED with it, so neither ends up here.
+// That erase was hers, so localStorage stands, and the native copy, which still holds what she
+// erased, becomes the undo copy for 7 days, as a Start fresh in this build would have made it.
+// The usual merge would instead bring back every star she erased there, or, after an erase in this
+// build, let the native copy's higher eraseGen throw away everything she has earned since.
+// True once the undo copy is stored, or there was nothing to keep. False when it could be stored
+// nowhere: the usual merge then runs, and what she erased comes back, but nothing is lost.
+// It runs inside nativeRestore, before the mirror opens, so it writes the native side itself.
+async function adoptOlderErase(P, other){
+  if(hasProgress(other)){
+    const now = Date.now();
+    const u = { kind:"bodhya-erase-undo", v:1, erasedAt: now, until: now + UNDO_DAYS * DAY_MS,
+                state: JSON.parse(JSON.stringify(other)) };
+    let prev = null;
+    try { prev = JSON.parse(localStorage.getItem(undoKey())); } catch(e){}
+    if(!_validUndo(prev)){ prev = null; try { const r = await P.get({ key: undoKey() }); prev = JSON.parse(r && r.value); } catch(e){} }
+    if(!_validUndo(prev) || now > prev.until) prev = null;
+    const uj = JSON.stringify(withEarlierUndo(u, prev));
+    let stored = writeLocal(undoKey(), uj);
+    try {
+      await P.set({ key: undoKey(), value: uj });
+      const r = await P.get({ key: undoKey() });
+      stored = (!!r && r.value === uj) || stored;
+    } catch(e){}
+    if(!stored) return false;
+  }
+  state.eraseGen = Math.max(eraseGenOf(state), eraseGenOf(other)) + 1;
+  return true;
+}
+
+// Rules 2 and 6 at launch: read the native copy, merge it with localStorage's (mergeCopy), then
+// open the mirror gate and write the merged state to both. Writing both also seeds a native copy
+// that does not exist yet (the first launch after the update) and raises an older one. Resolves
+// true when the merge changed her state; the screen is then drawn again from it. Never rejects.
+// On the web, or in an app without the Preferences plugin, it resolves false at once and the gate
+// stays shut. If the read fails twice, the gate stays shut for this launch too: a copy that could
+// not be read must not be overwritten, and localStorage alone carries on as before v8.
+const nativeRestore = (async function(){
+  let P = nativePrefs();
+  if(!P && window.Capacitor){
+    // The bridge can register its plugins a little after the page's scripts run.
+    if(document.readyState !== "complete") await new Promise(r => window.addEventListener("load", r, { once:true }));
+    for(let t = 0; t < 2000 && !(P = nativePrefs()); t += 100) await new Promise(r => setTimeout(r, 100));
+  }
+  if(!P) return false;
+  const key = stateKey();
+  let got = null, read = false;
+  for(let i = 0; i < 2 && !read; i++){ try { got = await P.get({ key }); read = true; } catch(e){} }
+  if(!read) return false;
+  let other = null;
+  try { const v = JSON.parse(got && got.value); if(v && typeof v === "object" && !Array.isArray(v)) other = v; } catch(e){}
+  const before = JSON.stringify(state);
+  const olderErase = !!other && other.nativeCopy === true && !localWasMissing && !BOOT_MARKED[key]
+                     && BOOT_NATIVE_SAVED && await adoptOlderErase(P, other);
+  const merged = olderErase ? state : mergeCopy(state, other, localWasMissing);
+  if(merged !== state) state = withBootDefaults(merged);
+  _mirrorOpen = true;
+  if(save() && localWasMissing){ try { localStorage.removeItem("hikmat_native_unmerged"); } catch(e){} }
+  const changed = JSON.stringify(state) !== before;
+  if(changed){
+    // As the theme and language toggles do: the top bar, then the screen she is on.
+    try { refreshTop(); } catch(e){}
+    try { rerender(); } catch(e){}
+  }
+  return changed;
+})();
+// An undo copy past its 7 days is removed at launch, once the native copy has been read.
+nativeRestore.then(() => readUndo()).catch(() => {});
 
 // ---------- Progress: state.progress[courseKey][lessonKey][activityId] = stars(0-3) ----------
 function getStars(ck, lk, aid){ return (((state.progress||{})[ck]||{})[lk]||{})[aid] || 0; }
@@ -2118,14 +2522,15 @@ function buildPaper(n){
   return { clientId: uid(), qs, reused: bankFirst.length < want };
 }
 function qSecs(q, n){ const r = levelRules(n).secs || {}; return q.d==="e" ? (r.easy||20) : q.d==="h" ? (r.hard||45) : (r.medium||30); }
-// The bank follows the curriculum's own three-layer contract: localStorage cache → the
+// The bank follows the curriculum's own three-layer contract: the cache (contentStore) → the
 // SW-precached static file → the live API. Each layer overwrites the previous only when it
 // returns something, so going offline never loses the bank; and no layer is required — with
 // none of them the tests still run on the lessons' own quiz items (levelPool).
 function applyTestBank(b){ if(b && Array.isArray(b.bank) && Array.isArray(b.levels) && (b.bank.length || b.levels.length)){ LEVEL_BANK = { levels: b.levels, bank: b.bank }; dropLevelCache(); return true; } return false; }
 async function loadTestBank(){
   let have = false;
-  try { have = applyTestBank(JSON.parse(localStorage.getItem(TESTBANK_KEY))); } catch(e){}
+  await contentReady;
+  try { have = applyTestBank(await contentStore.get(TESTBANK_KEY)); } catch(e){}
   if(!have){
     try { const r = await fetch(assetURL("testbank.json"), {headers:{Accept:"application/json"}});
           if(r.ok) have = applyTestBank(await r.json()); } catch(e){}
@@ -2133,7 +2538,7 @@ async function loadTestBank(){
   try {
     const r = await apiFetch(apiURL("get_test_bank"), {headers:{Accept:"application/json"}});
     if(r.ok){ const j = (await r.json()).message;
-              if(applyTestBank(j)){ try { localStorage.setItem(TESTBANK_KEY, JSON.stringify(j)); } catch(e){} } }
+              if(applyTestBank(j)) contentStore.set(TESTBANK_KEY, j); }
   } catch(e){}
   if(typeof refreshTop === "function") refreshTop();
 }
@@ -3614,7 +4019,351 @@ function openLevelSheet(){
   if(go) go.onclick = () => { sfx.enter(); close(); renderTestIntro(cur, rerender); };
   srSay(title + ". " + body); try { speak(body, state.lang, {}); } catch(e){}
 }
-function openProgressSheet(){
+// ---------- Save my progress / Bring my progress (rule 7) ----------
+// Her progress as one small file she can keep on WhatsApp, Bluetooth or Files, and bring back in
+// on this phone or a new one. The file holds ONE learner, the profile on screen, and nothing that
+// names her: it travels through family phones and group chats, so neither its contents nor its
+// file name may say who she is. Bringing a file in asks first, keeps the higher of every value
+// (rule 2), takes the file's settings only for a learner with no progress yet (D5), and never
+// takes its eraseGen: bringing a file in is her own choice, not a copy the launch merge weighs.
+const PROGRESS_FILE_MAX = 2 * 1024 * 1024;
+const SETTING_FIELDS = ["lang", "theme", "sound", "gender", "mascot", "prefsTouched"];
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+function starsIn(st){
+  let t = 0; const p = (st && st.progress) || {};
+  for(const c in p) for(const l in p[c]) for(const a in p[c][l]) t += p[c][l][a] || 0;
+  return t;
+}
+function progressFileName(){
+  const d = new Date(), z = n => String(n).padStart(2, "0");
+  return "bodhya-progress-" + d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + ".json";
+}
+function progressFileText(st){
+  return JSON.stringify({ kind:"bodhya-progress", v:1, app:"net.bodhya.learn", savedAt:new Date().toISOString(), state:st });
+}
+function _isObj(x){ return !!x && typeof x === "object" && !Array.isArray(x); }
+// A file is not trusted: only plain keys of a sane length, never the ones that reach a prototype,
+// and never the name of anything every object inherits ("toString", "hasOwnProperty", ...). The
+// merge reads `into.progress[ck] || {}`, so under such a name it would find the built-in function
+// and write the file's games onto it, for every object in the game to share.
+function _safeKeys(o){ return _isObj(o) ? Object.keys(o).filter(k => k.length > 0 && k.length <= 140 && !UNSAFE_KEYS.has(k) && !(k in Object.prototype)) : []; }
+function _int(x, lo, hi){ return typeof x === "number" && isFinite(x) ? Math.min(hi, Math.max(lo, Math.round(x))) : null; }
+// Only the fields the game knows, each in the shape it expects; anything else is left behind.
+// A setting the file does not hold validly is absent, so D5 can never apply a default as hers.
+function cleanImportedState(o){
+  const out = { progress:{}, coins:0, testSeen:{}, levelTests:{}, videosSeen:{}, seenTypes:{}, lastLoc:{} };
+  if(!_isObj(o)) return out;
+  for(const ck of _safeKeys(o.progress)) for(const lk of _safeKeys(o.progress[ck])) for(const aid of _safeKeys(o.progress[ck][lk])){
+    const s = _int(o.progress[ck][lk][aid], 0, 3);
+    if(s === null) continue;
+    const c = out.progress[ck] || (out.progress[ck] = {});
+    (c[lk] || (c[lk] = {}))[aid] = s;
+  }
+  out.coins = _int(o.coins, 0, 10000000) || 0;
+  for(const n of _safeKeys(o.levelTests)){
+    const t = o.levelTests[n];
+    if(_isObj(t)) out.levelTests[n] = { passed: t.passed === true, bestPct: _int(t.bestPct, 0, 100) || 0,
+                                        attempts: _int(t.attempts, 0, 1000000) || 0 };
+  }
+  for(const k of _safeKeys(o.testSeen)){
+    const a = o.testSeen[k];
+    if(Array.isArray(a)) out.testSeen[k] = a.filter(x => typeof x === "string" && x.length <= 140).slice(0, 5000);
+  }
+  for(const f of ["videosSeen", "seenTypes"]) for(const k of _safeKeys(o[f])) if(o[f][k]) out[f][k] = 1;
+  for(const m of _safeKeys(o.lastLoc)){
+    const v = o.lastLoc[m];
+    if(_isObj(v) && typeof v.ck === "string" && typeof v.lk === "string" && v.ck.length <= 140 && v.lk.length <= 140)
+      out.lastLoc[m] = { ck: v.ck, lk: v.lk };
+  }
+  if(typeof o.lastMode === "string" && o.lastMode.length <= 40) out.lastMode = o.lastMode;
+  if(o.lang === "en" || o.lang === "hi") out.lang = o.lang;
+  if(o.theme === "light" || o.theme === "dark") out.theme = o.theme;
+  if(typeof o.sound === "boolean") out.sound = o.sound;
+  if(o.gender === "Female" || o.gender === "Male" || o.gender === "Other") out.gender = o.gender;
+  if(typeof o.mascot === "string" && Object.prototype.hasOwnProperty.call(MASCOT_BY_ID, o.mascot)) out.mascot = o.mascot;
+  if(typeof o.prefsTouched === "boolean") out.prefsTouched = o.prefsTouched;
+  return out;
+}
+// {state} for a Bodhya progress file of any version, or {error}. Not ours: anything that is not
+// JSON, or not an object with kind "bodhya-progress", a version from 1 and a state object.
+function readProgressFile(text){
+  let doc;
+  try { doc = JSON.parse(String(text).replace(/^﻿/, "")); } catch(e){ return { error:"notjson" }; }
+  if(!_isObj(doc) || doc.kind !== "bodhya-progress" || !(typeof doc.v === "number" && doc.v >= 1) || !_isObj(doc.state))
+    return { error:"notours" };
+  return { state: cleanImportedState(doc.state) };
+}
+function hasProgress(st){
+  if(starsIn(st) > 0 || (st.coins || 0) > 0) return true;
+  const t = st.levelTests || {};
+  for(const n in t) if(t[n] && t[n].passed) return true;
+  return false;
+}
+// Her state with a cleaned file brought in. Her eraseGen stays: cleanImportedState never reads one.
+function mergeBrought(cur, clean){
+  const next = mergeSavedState(JSON.parse(JSON.stringify(cur)), clean, { sameLearner:true });
+  if(!hasProgress(cur)) for(const f of SETTING_FIELDS) if(clean[f] !== undefined) next[f] = clean[f];
+  return next;
+}
+// "saved", "cancelled" (she closed the share sheet) or "failed".
+async function saveProgressFile(){
+  const name = progressFileName(), text = progressFileText(state);
+  const title = tx("My Bodhya progress","मेरी बोध्या प्रगति");
+  const F = capPlugin("Filesystem"), S = capPlugin("Share");
+  if(F && S && typeof F.writeFile === "function" && typeof S.share === "function"){
+    let uri;
+    try { uri = (await F.writeFile({ path:name, data:text, directory:"CACHE", encoding:"utf8" })).uri; }
+    catch(e){ return "failed"; }
+    try { await S.share({ title, files:[uri] }); return "saved"; }
+    catch(e){ return /cancel/i.test(String((e && e.message) || e)) ? "cancelled" : "failed"; }
+  }
+  let file = null;
+  try { file = new File([text], name, { type:"application/json" }); } catch(e){}
+  let canShare = false;
+  try { canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({ files:[file] })); } catch(e){}
+  if(canShare){
+    try { await navigator.share({ title, files:[file] }); return "saved"; }
+    catch(e){ if(e && e.name === "AbortError") return "cancelled"; }
+  }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type:"application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return "saved";
+  } catch(e){ return "failed"; }
+}
+// The confirm sheet: how many stars the file holds, then Bring it in or Not now. Resolves true on yes.
+function askBring(stars){
+  return new Promise(resolve => {
+    const ex = document.getElementById("bringWrap"); if(ex) ex.remove();
+    const title = tx("Bring in this progress?","यह प्रगति वापस लानी है?");
+    const body = tx("This file has " + stars + " stars. You keep the best of this file and this phone.",
+                    "इस फ़ाइल में " + stars + " सितारे हैं। फ़ाइल और इस फ़ोन में से जो बेहतर है, वही रहेगा।");
+    const yes = tx("Bring it in","वापस लाओ"), no = tx("Not now","अभी नहीं");
+    const hear = tx(title + " " + body + " " + yes + ": the stars come in. " + no + ": nothing changes.",
+                    title + " " + body + " " + yes + ": सितारे आ जाएँगे। " + no + ": कुछ नहीं बदलेगा।");
+    const w = el(`<div class="sheetwrap" id="bringWrap">
+      <div class="sheet settingsheet" role="dialog" aria-modal="true" aria-label="${escAttr(title)}">
+        <div class="doubthead">
+          <div class="doubttitle"><div class="doubtq">${esc(title)}</div><div class="doubtsub">${esc(body)}</div></div>
+          <button class="speakchip" id="bringSay" style="width:48px; height:48px; flex:0 0 auto" aria-label="${escAttr(tx("Hear it","सुनो"))}" title="${escAttr(tx("Hear it","सुनो"))}">🔊</button>
+        </div>
+        <button class="btn primary ink wide" id="bringYes" style="min-height:48px">${esc(yes)}</button>
+        <button class="btn ghost wide" id="bringNo" style="min-height:48px; margin-top:10px">${esc(no)}</button>
+      </div>
+    </div>`);
+    document.body.appendChild(w);
+    let done = false;
+    const end = ok => { if(done) return; done = true; stopSpeech(); w.remove(); resolve(ok); };
+    w.querySelector("#bringYes").onclick = () => { sfx.tap(); end(true); };
+    w.querySelector("#bringNo").onclick = () => { sfx.back(); end(false); };
+    w.querySelector("#bringSay").onclick = () => speak(hear, state.lang === "hi" ? "hi" : "en");
+    w.onclick = e => { if(e.target === w){ sfx.back(); end(false); } };
+    srSay(title);
+  });
+}
+// File.text() is Chrome 76; the game runs from WebView 60, which phones that never update still have.
+function readFileText(file){
+  if(typeof file.text === "function") return file.text();
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error);
+    r.readAsText(file);
+  });
+}
+// {ok, stars} once the file is in her state and kept; otherwise {ok:false, error}, and nothing
+// changed: "toobig", "notjson", "notours", "declined", or "notsaved" when neither copy took it.
+async function bringProgressFile(file){
+  if(!file) return { ok:false, error:"notours" };
+  if(file.size > PROGRESS_FILE_MAX) return { ok:false, error:"toobig" };
+  let text;
+  try { text = await readFileText(file); } catch(e){ return { ok:false, error:"notjson" }; }
+  const r = readProgressFile(text);
+  if(r.error) return { ok:false, error:r.error };
+  if(!(await askBring(starsIn(r.state)))) return { ok:false, error:"declined" };
+  const before = state, foldWaited = endFoldWhenKept;
+  state = mergeBrought(state, r.state);
+  const kept = save();
+  const mirrored = await Promise.race([mirrorNow(stateKey(), JSON.stringify(state)),
+                                       new Promise(res => setTimeout(() => res(false), 5000))]);
+  if(!kept && !mirrored){ state = before; endFoldWhenKept = foldWaited; return { ok:false, error:"notsaved" }; }
+  try { refreshTop(); } catch(e){}
+  try { rerender(); } catch(e){}
+  return { ok:true, stars: totalStars() };
+}
+
+// ---------- Start fresh, and its 7-day undo (rule 11) ----------
+// Start fresh asks on its own sheet, and an erase can be undone for 7 days. The undo copy (D7)
+// lives under hikmat_undo_<id> in localStorage and in Preferences, so a WebView that comes back
+// empty still has it. It is never merged by itself: only "Bring back what I erased" restores it,
+// and an expired one is removed at launch. An erase that has no store for its undo copy does not
+// happen: she is told it failed, and nothing changes.
+const UNDO_DAYS = 7, DAY_MS = 864e5;
+let ERASE_GUARD_MS = 600;            // Erase ignores taps this long after its sheet opens
+function undoKey(){ return "hikmat_undo_" + ((currentStudent && currentStudent.id) || "guest"); }
+function _validUndo(u){ return _isObj(u) && u.kind === "bodhya-erase-undo" && typeof u.until === "number" && isFinite(u.until) && _isObj(u.state); }
+function _withTimeout(p, ms, v){ return Promise.race([p, new Promise(r => setTimeout(() => r(v), ms))]); }
+// The native side for a key other than her state, which mirrorState() alone writes. Each waits
+// for the launch to have read the native copy, and does nothing where there is none.
+async function _nativeGet(key){
+  try { await nativeRestore; } catch(e){}
+  const P = _mirrorOpen && nativePrefs();
+  if(!P) return null;
+  try { const r = await P.get({ key }); return r && typeof r.value === "string" ? r.value : null; } catch(e){ return null; }
+}
+// True only once the value reads back: a write can resolve and still be lost.
+async function _nativePut(key, json){
+  try { await nativeRestore; } catch(e){}
+  const P = _mirrorOpen && nativePrefs();
+  if(!P) return false;
+  try { await P.set({ key, value: json }); const r = await P.get({ key }); return !!r && r.value === json; } catch(e){ return false; }
+}
+async function _nativeDrop(key){
+  try { await nativeRestore; } catch(e){}
+  const P = _mirrorOpen && nativePrefs();
+  try { if(P && typeof P.remove === "function") await P.remove({ key }); } catch(e){}
+}
+async function dropUndo(){ try { localStorage.removeItem(undoKey()); } catch(e){} await _nativeDrop(undoKey()); }
+// The live undo copy, from localStorage or else the native store, or null. An expired one is
+// removed from both.
+async function readUndo(){
+  let u = null;
+  try { u = JSON.parse(localStorage.getItem(undoKey())); } catch(e){}
+  if(!_validUndo(u)){ u = null; try { u = JSON.parse(await _nativeGet(undoKey())); } catch(e){} if(!_validUndo(u)) u = null; }
+  if(u && Date.now() > u.until){ await dropUndo(); return null; }
+  return u;
+}
+// What an erase of `st` keeps. A waiting account fold ends with the erase (eraseWaitingFold), and
+// its stars were never in her profile: they are in the account's own key, which nothing deletes.
+// So the copy says which account it was, by id and never by name, and the restore folds it back.
+function undoCopyOf(st){
+  const now = Date.now();
+  const u = { kind:"bodhya-erase-undo", v:1, erasedAt: now, until: now + UNDO_DAYS * DAY_MS, state: JSON.parse(JSON.stringify(st)) };
+  const acct = waitingAccount();
+  if(acct && acct.id) u.fold = { id: String(acct.id), gender: acct.gender, mascot: acct.mascot };
+  return u;
+}
+// A second Start fresh inside the 7 days must not throw away the first one's undo copy, or the
+// stars of the first erase are gone for good days before she was told. So the new copy holds both,
+// the higher of each, as one restore would bring them back, and runs 7 days from the newest erase.
+function withEarlierUndo(u, prev){
+  if(!prev) return u;
+  u.state = mergeSavedState(JSON.parse(JSON.stringify(u.state)), JSON.parse(JSON.stringify(prev.state)), { sameLearner:true });
+  if(!u.fold && prev.fold) u.fold = prev.fold;
+  return u;
+}
+async function putUndo(json){ writeLocal(undoKey(), json); await _nativePut(undoKey(), json); }
+// Her state with the undo copy brought back: her current settings and everything earned since
+// the erase stay, every erased star returns, and eraseGen goes one above both copies, so no copy
+// from before the restore (the erased one, say, in a native store that lost a write) can win.
+function mergeRestore(cur, u){
+  let r = mergeSavedState(JSON.parse(JSON.stringify(cur)), JSON.parse(JSON.stringify(u.state)), { sameLearner:true });
+  if(u.fold && u.fold.id){
+    let acct = null;
+    try { acct = JSON.parse(localStorage.getItem(stateKeyFor(u.fold.id))); } catch(e){}
+    if(acct) r = mergeSavedState(r, acct);   // another learner's, as the fold itself merges
+    carryMascotAndGender(r, u.fold);
+  }
+  r.eraseGen = Math.max(eraseGenOf(cur), eraseGenOf(u.state)) + 1;
+  return r;
+}
+// Start fresh. True once the erase is kept and its undo copy is somewhere; false when nothing
+// changed.
+async function eraseProgress(){
+  const before = state, foldWaitedBefore = endFoldWhenKept;
+  const prev = await readUndo();
+  const uj = JSON.stringify(withEarlierUndo(undoCopyOf(before), prev));
+  const localUndo = writeLocal(undoKey(), uj);
+  const nativeUndo = await _withTimeout(_nativePut(undoKey(), uj), 5000, false);
+  if(!localUndo && !nativeUndo) return false;
+  // Her settings are not her progress. Language, sound, theme, guide and the way Hindi addresses
+  // her all ride across the erase.
+  const keep = { lang: state.lang, sound: state.sound, theme: state.theme,
+                 gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
+  // eraseGen goes up by one, so that in every launch merge from now on (mergeCopy) the erased
+  // state beats any copy from before it: a native write that was lost, a stale backup, a fold.
+  state = Object.assign(fresh(), keep, { eraseGen: eraseGenOf(before) + 1 });
+  // "Every star on this phone" includes an account fold still waiting for room. Its stars go
+  // with hers, and the guide and Hindi form it carries stay, as they would had it landed first.
+  eraseWaitingFold(state);
+  const kept = save();
+  // The native copy counts only once it reads back as the erased state.
+  const mirrored = await _withTimeout(mirrorNow(stateKey(), JSON.stringify(state)), 5000, false);
+  if(!kept && !mirrored){ await eraseNotKept(before, foldWaitedBefore, prev); return false; }
+  return true;
+}
+// Neither copy confirmed the erase, so she is told it failed, and her state goes back: kept in
+// memory, the erase would be stored later with some other save, after she was told it had not
+// happened. But the erased state may still reach the native copy. A native write cannot be called
+// back, and the one above may only have been slow; landing later, its higher eraseGen would win
+// the next launch with nothing left to undo it. So her state before the erase is written after it,
+// and the undo copy goes back to what it was (none, or the earlier erase's) only once the native
+// copy reads back as that state. Until then it stays, so an erase that does land can be undone.
+async function eraseNotKept(before, foldWaitedBefore, prev){
+  state = before; endFoldWhenKept = foldWaitedBefore;
+  const settled = !_mirrorOpen || await _withTimeout(mirrorNow(stateKey(), JSON.stringify(before)), 5000, false);
+  if(!settled) return;
+  if(prev) await putUndo(JSON.stringify(prev)); else await dropUndo();
+}
+// {ok, stars} once the restore is kept and the undo copy gone; {ok:false, error} otherwise, and
+// nothing changed.
+async function restoreErased(){
+  const u = await readUndo();
+  if(!u) return { ok:false, error:"gone" };
+  const before = state, foldWaitedBefore = endFoldWhenKept;
+  state = mergeRestore(state, u);
+  // A fold the restore brought back must not land again: hikmat_current goes with the first save
+  // that lands, as it does after an erase.
+  if(u.fold && waitingAccount()) endFoldWhenKept = true;
+  const kept = save();
+  const mirrored = await _withTimeout(mirrorNow(stateKey(), JSON.stringify(state)), 5000, false);
+  if(!kept && !mirrored){ state = before; endFoldWhenKept = foldWaitedBefore; return { ok:false, error:"notsaved" }; }
+  await dropUndo();
+  try { refreshTop(); } catch(e){}
+  try { rerender(); } catch(e){}
+  return { ok:true, stars: totalStars() };
+}
+// The confirm sheet (Figma 23:244), bottom-anchored like every sheet: title, body, undo note,
+// Erase, a 32 px gap, then Keep it last, where the thumb that tapped Start fresh still is.
+// done(true) after an erase that was kept, done(false) after one that could not be, and
+// done(null) when she keeps it (Keep it, or a tap outside the sheet).
+function openEraseSheet(done){
+  const ex = document.getElementById("eraseWrap"); if(ex) ex.remove();
+  const title = tx("Erase your progress?","अपनी प्रगति मिटानी है?");
+  const body = tx("Your stars, lessons and gems on this phone will be erased. Your settings stay.",
+                  "इस फ़ोन से तुम्हारे सितारे, पाठ और रत्न मिट जाएँगे। तुम्हारी सेटिंग वैसी ही रहेगी।");
+  const note = tx("You can undo this for 7 days.","7 दिन तक इसे वापस लाया जा सकता है।");
+  const w = el(`<div class="sheetwrap" id="eraseWrap">
+    <div class="sheet settingsheet" role="dialog" aria-modal="true" aria-label="${escAttr(title)}">
+      <div class="doubthead">
+        <div class="doubttitle"><div class="doubtq">${esc(title)}</div><div class="doubtsub">${esc(body)}</div></div>
+        <button class="speakchip" id="eraseSay" style="width:48px; height:48px; flex:0 0 auto" aria-label="${escAttr(tx("Hear it","सुनो"))}" title="${escAttr(tx("Hear it","सुनो"))}">🔊</button>
+      </div>
+      <div style="color:var(--muted); font-size:15px; font-weight:600; margin:6px 0 18px">${esc(note)}</div>
+      <button class="btn danger outline wide" id="eraseYes" style="min-height:56px">${esc(tx("Erase","मिटाओ"))}</button>
+      <button class="btn primary ink wide" id="eraseKeep" style="min-height:56px; margin-top:32px">${esc(tx("Keep it","रहने दो"))}</button>
+    </div>
+  </div>`);
+  document.body.appendChild(w);
+  const openedAt = Date.now();
+  let busy = false;
+  const shut = () => { stopSpeech(); w.remove(); };
+  w.querySelector("#eraseYes").onclick = async () => {
+    if(busy || Date.now() - openedAt < ERASE_GUARD_MS) return;
+    busy = true; sfx.tap();
+    const ok = await eraseProgress();
+    shut();
+    done(ok);
+  };
+  w.querySelector("#eraseKeep").onclick = () => { if(busy) return; sfx.back(); shut(); done(null); };
+  w.onclick = e => { if(e.target === w && !busy){ sfx.back(); shut(); done(null); } };
+  w.querySelector("#eraseSay").onclick = () => speak(title + " " + body + " " + note, state.lang === "hi" ? "hi" : "en");
+  srSay(title);
+}
+
+function openProgressSheet(note){
   const _ex = document.getElementById("progWrap"); if(_ex) _ex.remove();
   sfx.tap(); stopSpeech();
   let done = 0;
@@ -3639,41 +4388,101 @@ function openProgressSheet(){
         <div class="savechip">💎 ${esc(tx(gems+" gems", gems+" रत्न"))}</div>
         <div class="savechip">🏆 ${esc(studentLevel() > 5 ? tx("All levels passed","सभी स्तर पास") : levelTitle(shownLevel()))}</div>
       </div>
-      <div class="teachbox" id="progWarn" style="display:none">💡 <span></span></div>
-      <button class="btn danger wide" id="progWipe">${tx("Start fresh","नए सिरे से शुरू करो")}</button>
-      <button class="btn ghost wide" id="dClose">${tx("Close","बंद करो")}</button>
+      <div class="teachbox" id="progWarn" style="display:none" aria-live="polite">💡 <span></span></div>
+      <button class="btn ghost wide" id="progSave" style="min-height:48px; margin-bottom:10px">💾 ${esc(tx("Save my progress","अपनी प्रगति सहेजो"))}
+        <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(tx("A small file to keep on WhatsApp, Bluetooth or Files","एक छोटी फ़ाइल, जिसे WhatsApp, ब्लूटूथ या Files में रखा जा सकता है"))}</small></button>
+      <button class="btn ghost wide" id="progBring" style="min-height:48px; margin-bottom:10px">📂 ${esc(tx("Bring my progress","अपनी प्रगति वापस लाओ"))}
+        <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(tx("Nothing you have now is lost","अभी का कुछ भी नहीं मिटेगा"))}</small></button>
+      <input type="file" id="progFile" hidden>
+      <button class="btn ghost wide" id="dClose" style="min-height:48px">${tx("Close","बंद करो")}</button>
+      <button class="btn danger wide" id="progWipe" style="min-height:48px; margin-top:24px">${tx("Start fresh","नए सिरे से शुरू करो")}</button>
     </div>
   </div>`);
   document.body.appendChild(sheet);
   const close = () => sheet.remove();
   const wipe = sheet.querySelector("#progWipe");
   const warn = sheet.querySelector("#progWarn");
-  let armed = false;
+  // Every message in this sheet goes through here; data-msg says which one it is, in any language.
+  const say = (msg, text) => {
+    warn.style.display = "block"; warn.dataset.msg = msg;
+    warn.querySelector("span").textContent = text; srSay(text);
+  };
+  const unsay = () => { warn.style.display = "none"; warn.dataset.msg = ""; };
+  let erasing = false, filing = false;
   wipe.onclick = () => {
-    if(!armed){
-      armed = true; sfx.tap();
-      warn.style.display = "block";
-      warn.querySelector("span").textContent =
-        tx("This erases every star and gem on this phone. It cannot be undone.",
-           "इससे इस फ़ोन के सारे सितारे और रत्न मिट जाएँगे। यह वापस नहीं आएगा।");
-      wipe.textContent = tx("Yes, erase everything","हाँ, सब कुछ मिटा दो");
-      srSay(warn.querySelector("span").textContent);
+    if(erasing || filing) return;
+    sfx.tap(); unsay();
+    erasing = true;
+    openEraseSheet(ok => {
+      erasing = false;
+      if(ok === null) return;
+      if(!ok){ say("erasefail", tx("Could not erase. Try again.","मिटाया नहीं जा सका। फिर से कोशिश करो।")); return; }
+      // The home screen she goes back to is the erased one; the sheet stays, so she sees that it
+      // happened and where to bring it back from.
+      close(); try { renderHome(); } catch(e){}
+      openProgressSheet({ msg:"erased", text: tx("Progress erased. You can bring it back for 7 days.",
+                                                 "प्रगति मिटा दी गई। 7 दिन तक इसे वापस लाया जा सकता है।") });
+    });
+  };
+  // The undo row, while a copy is live: "Bring back what I erased", with the days left.
+  readUndo().then(u => {
+    if(!u || !document.body.contains(sheet) || sheet.querySelector("#progUndo")) return;
+    const days = Math.max(1, Math.ceil((u.until - Date.now()) / DAY_MS));
+    const left = days > 1 ? tx(days + " days left", days + " दिन बाकी") : tx("Last day","आज आख़िरी दिन");
+    const row = el(`<button class="btn ghost wide" id="progUndo" data-days="${days}" style="min-height:48px; margin-bottom:10px">↩️ ${esc(tx("Bring back what I erased","मिटाया हुआ वापस लाओ"))}
+      <small style="display:block; font-weight:600; font-size:13px; opacity:.8; margin-top:2px">${esc(left)}</small></button>`);
+    sheet.querySelector("#dClose").before(row);
+    row.onclick = async () => {
+      if(filing || erasing) return;
+      filing = true; sfx.tap(); unsay();
+      const r = await restoreErased();
+      filing = false;
+      if(r.ok){
+        close();
+        openProgressSheet({ msg:"restored", text: tx("Your progress is back: " + r.stars + " stars",
+                                                     "तुम्हारी प्रगति वापस आ गई: " + r.stars + " सितारे") });
+        return;
+      }
+      say("undofail", tx("Could not bring it back. Try again.","वापस नहीं लाया जा सका। फिर से कोशिश करो।"));
+    };
+  });
+  sheet.querySelector("#progSave").onclick = async () => {
+    if(filing || erasing) return;
+    filing = true; sfx.tap(); unsay();
+    const r = await saveProgressFile();
+    filing = false;
+    if(r === "saved") say("saved", tx("File saved. Keep it safe.","फ़ाइल सहेज ली गई। इसे संभालकर रखो।"));
+    else if(r === "failed") say("savefail", tx("Could not save the file. Try again.","फ़ाइल सहेजी नहीं जा सकी। फिर से कोशिश करो।"));
+  };
+  const fileIn = sheet.querySelector("#progFile");
+  sheet.querySelector("#progBring").onclick = () => {
+    if(filing || erasing) return;
+    sfx.tap(); unsay();
+    fileIn.value = "";
+    fileIn.click();
+  };
+  fileIn.onchange = async () => {
+    const f = fileIn.files && fileIn.files[0];
+    if(!f || filing) return;
+    filing = true;
+    const r = await bringProgressFile(f);
+    filing = false;
+    if(r.ok){
+      // Her language, theme or numbers may all have changed: draw the sheet again from them.
+      close();
+      openProgressSheet({ msg:"brought", text: tx("Progress brought back: " + r.stars + " stars",
+                                                  "प्रगति वापस आ गई: " + r.stars + " सितारे") });
       return;
     }
-    // Her settings are not her progress. Language, sound, theme, guide and the way Hindi
-    // addresses her all ride across the wipe — losing those too would be a second punishment
-    // for a tap that was only ever about stars.
-    const keep = { lang: state.lang, sound: state.sound, theme: state.theme,
-                   gender: state.gender, mascot: state.mascot, prefsTouched: state.prefsTouched };
-    state = Object.assign(fresh(), keep);
-    save();
-    sfx.back(); close(); renderHome();
-    srSay(tx("Progress erased.","प्रगति मिटा दी गई।"));
+    if(r.error === "declined") return;
+    if(r.error === "notsaved") say("bringfail", tx("Could not bring it in. Try again.","वापस नहीं लाया जा सका। फिर से कोशिश करो।"));
+    else say("notours", tx("This is not a Bodhya progress file.","यह बोध्या की प्रगति वाली फ़ाइल नहीं है।"));
   };
   sheet.querySelector("#dClose").onclick = () => { sfx.back(); close(); };
   sheet.querySelector("[data-x]").onclick = () => { sfx.back(); close(); };
   sheet.onclick = (e) => { if(e.target === sheet) close(); };
   srSay(title);
+  if(note) say(note.msg, note.text);
 }
 
 // Who is playing — rendered as menu rows. This used to be a chip bolted onto Home and the class
@@ -6643,11 +7452,16 @@ async function api(method, params, post){
 
 async function loadFromBackend(){
   // 1) cached content + settings first → instant and works offline (logo, name, taglines persist)
+  //    The settings cache is small and stays in localStorage, read at once as before. The lessons
+  //    and structure caches are in IndexedDB (contentStore), read once the move out of
+  //    localStorage (contentReady) is done.
   let haveCache = false;
-  try { const c = JSON.parse(localStorage.getItem(CACHE_KEY)); if(Array.isArray(c) && c.length){ COURSES = c; haveCache = true; } } catch(e){}
-  try { const st = JSON.parse(localStorage.getItem(STRUCT_KEY)); if(st && st.bands && st.bands.length){ BANDS = st.bands; SUBJECTS = st.subjects || SUBJECTS; } } catch(e){}
   try { const s = JSON.parse(localStorage.getItem("hikmat_settings_cache"));
         if(s && s.appName){ SETTINGS.appName = s.appName; SETTINGS.logo = s.logo || ""; if(s.taglineEn) SETTINGS.tagline.en = s.taglineEn; if(s.taglineHi) SETTINGS.tagline.hi = s.taglineHi; SETTINGS.aiEnabled = !!s.aiEnabled; SETTINGS.voiceEnabled = !!s.voiceEnabled; if(Array.isArray(s.milestones)) SETTINGS.milestones = s.milestones; applySettingsDefaults(s); } } catch(e){}
+  await contentReady;
+  const [c, st] = await Promise.all([contentStore.get(CACHE_KEY), contentStore.get(STRUCT_KEY)]);
+  if(Array.isArray(c) && c.length){ COURSES = c; haveCache = true; }
+  if(st && st.bands && st.bands.length){ BANDS = st.bands; SUBJECTS = st.subjects || SUBJECTS; }
   // 1b) durable offline baseline: the full curriculum shipped as a static file (precached by the
   //     service worker). Without this, a first-ever-offline launch or a localStorage wipe would fall
   //     back to the tiny bundled COURSES (4 tracks) instead of all lessons.
@@ -6671,14 +7485,22 @@ async function loadFromBackend(){
       if(j && Array.isArray(j.message) && j.message.length){
         COURSES = j.message;
         dropLevelCache();                       // new content → new per-level rollups
-        localStorage.setItem(CACHE_KEY, JSON.stringify(COURSES));
+        // Into IndexedDB, not awaited. Only where IndexedDB will not take it does it go back to
+        // localStorage, through writeLocal(), because a bare setItem threw on a full phone, and
+        // that throw skipped the structure and settings below and reported a server that had
+        // answered as unreachable. writeLocal() makes room only by dropping the content caches
+        // themselves, so on a full phone with no IndexedDB this write also drops the structure
+        // and test-bank caches, even a bank loadTestBank() has only just fetched. That costs her
+        // nothing she has earned: offline the bands fall back to the defaults at the top of this
+        // file and the bank to testbank.json, and the next answer from the server caches both again.
+        contentStore.set(CACHE_KEY, COURSES);
       }
     }
     if(xr.ok){
       const x = (await xr.json()).message;
       if(x && Array.isArray(x.bands) && x.bands.length){
         BANDS = x.bands; SUBJECTS = x.subjects || SUBJECTS;
-        try { localStorage.setItem(STRUCT_KEY, JSON.stringify(x)); } catch(e){}
+        contentStore.set(STRUCT_KEY, x);
       }
     }
     if(sr.ok){

@@ -184,6 +184,18 @@ installs — everything they seed is mirrored in `seed_operational_defaults()`.
 7. **Backups**: on Frappe Cloud they're automatic; self-hosted, schedule
    `bench --site <site> backup` off-machine.
 
+## Every web deploy
+
+Run these each time the game goes to a web host, not only on day one.
+
+1. **Before**: `./verify-prod.sh` to record what is live now.
+2. **Release token**: if `hikmat/public/game.html` changed since the last deploy, move `CACHE`
+   in `hikmat/public/sw.js` one step up (`hikmat-pwa-v13` → `v14`), once per deploy, not per
+   commit. The proxy serves `/assets/` as immutable for a year under plain file names, so without
+   a new token installed PWAs and the proxy keep the old game. `play.py` and the worker derive
+   their URLs from this one line.
+3. **After**: `./verify-prod.sh` again, to confirm the new token and game are what is served.
+
 ## Reporting
 
 Found a vulnerability? Email **vishal@fossunited.org** — please don't open a public

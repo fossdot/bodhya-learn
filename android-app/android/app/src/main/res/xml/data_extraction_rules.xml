@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ (API 31+) backup scope. The pre-12 rules live in backup_rules.xml and MUST be
+  kept in step with this file — minSdk is 24, so most phones this app is built for read that
+  one, not this one.
+
+  WHY THIS FILE CHANGED (Vishal, 2026-08-27)
+  Until now everything here was excluded and allowBackup was false. The reason was sound at the
+  time: the app held a learner's NAME, her 90-day auth token, her not-yet-synced wrong-answer
+  text, and — on a shared campus laptop — a cached roster with OTHER children's names, PIN
+  hashes and tokens. None of that may ride out of the device on the device owner's Google
+  account, and the published data-deletion page promised parents it never would.
+
+  The packaged Play build no longer holds ANY of it. Accounts are web-only now (see
+  AUTH_ENABLED in index.html and the cut in bundle-game.js): there is no login, so no name, no
+  email, no token and no roster; recordEvent()/recordAttempt() return early with no identity,
+  so no wrong-answer text or attendance is ever written; and retireAccounts() erases whatever
+  an earlier build left behind on the first launch after the update.
+
+  What remains under app_webview is anonymous and nothing but: star counts per activity, a gem
+  total, which module tests were passed, which questions have been seen, the UI settings, and a
+  cache of the lesson content itself. That is the entire payload, and losing it is the ONLY
+  thing standing between a child and starting the whole curriculum again after a reinstall —
+  which, with no account to restore from, is otherwise permanent.
+
+  ⚠ BEFORE ROLLING OUT A BUILD WITH THIS FILE: the data-deletion page at
+  bodhya.net/data-deletion still tells parents that uninstalling the app removes the on-device
+  copy. With Auto Backup on, a copy also sits in the device owner's own Google Drive and comes
+  back on reinstall. That sentence has to say so first, or the app ships against its own
+  published promise. ☰ → "My progress" → "Start fresh" clears the device copy, and the next
+  backup cycle overwrites the Drive copy with the emptied state.
+
+  Scope is app_webview and nothing else — the WebView origin store where all of the above
+  lives. Naming it explicitly, rather than backing up the data directory wholesale, keeps any
+  future file a plugin decides to write OUT of the backup until somebody adds it here on
+  purpose.
+
+  Since v8 the state is also mirrored to shared_prefs/CapacitorStorage.xml (the Preferences
+  plugin), so it survives a WebView whose data is lost. That file holds the same anonymous state
+  as app_webview, plus the 7-day undo copy that Start fresh keeps. It is included beside
+  app_webview in every section below, in both files, so a reinstall brings the second copy back
+  too and the launch merge can use it.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="root" path="app_webview" />
+        <include domain="sharedpref" path="CapacitorStorage.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="root" path="app_webview" />
+        <include domain="sharedpref" path="CapacitorStorage.xml" />
+    </device-transfer>
+</data-extraction-rules>

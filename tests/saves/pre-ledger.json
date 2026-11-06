@@ -1,0 +1,7 @@
+{
+ "kind": "storage-snapshot",
+ "note": "A save from before seenTypes, levelTests, testSeen and videosSeen existed: only the first six activities, gems, and the old Hindi-gloss toggle still on.",
+ "localStorage": {
+  "hikmat_state_guest": "{\"progress\":{\"eng-foundation\":{\"l01\":{\"learn\":1,\"listen\":3,\"spell\":3,\"phrase\":2,\"quiz\":1},\"l02\":{\"learn\":3,\"listen\":3,\"spell\":2,\"phrase\":1,\"quiz\":3},\"l03\":{\"learn\":3,\"listen\":2,\"spell\":1,\"phrase\":3,\"quiz\":2},\"l04\":{\"learn\":2,\"listen\":1,\"spell\":3,\"phrase\":2,\"quiz\":3},\"l05\":{\"learn\":1,\"listen\":3,\"spell\":2,\"phrase\":3,\"quiz\":3},\"l06\":{\"learn\":3,\"listen\":2,\"spell\":3,\"phrase\":3,\"quiz\":2}},\"bazaar\":{\"l01\":{\"learn\":1,\"listen\":3,\"spell\":3,\"phrase\":2,\"talk\":1},\"l02\":{\"learn\":3,\"listen\":3,\"spell\":2,\"talk\":1},\"l03\":{\"learn\":3,\"phrase\":2,\"talk\":1},\"l04\":{\"learn\":2,\"listen\":1,\"spell\":3,\"phrase\":2,\"talk\":3},\"l05\":{\"learn\":1,\"listen\":3,\"spell\":2,\"phrase\":3,\"talk\":3},\"l06\":{\"learn\":3,\"listen\":2,\"spell\":3,\"phrase\":3,\"talk\":2}}},\"coins\":520,\"hindi\":true,\"lang\":\"en\",\"sound\":true}"
+ }
+}
