@@ -24,6 +24,8 @@ All of a student's progress sits in one localStorage key, `hikmat_state_guest`, 
 | `lastLoc`, `lastMode` | Resume point per door, last door used | |
 | `lang`, `sound`, `theme`, `gender`, `mascot`, `prefsTouched` | Her settings | Kept by Start fresh |
 
+v8 (Step 0) adds two fields to this state, `eraseGen` and `nativeCopy`, and keeps more beside it. All of it is listed under "Carrying every student over", with what step 3 has to do with it.
+
 A lesson's level is its position in its track (`defaultLevel`), not its difficulty. None of the 283 lessons has a level set by hand.
 
 Her level is the first of L1 to L5 whose test she hasn't passed, counted across every track. Stars from that level's lessons in any track fill one 100-star bar, and at 100 the test is offered.
@@ -78,7 +80,7 @@ A new phone first asks "Who's learning?": type her name, no login. No learner ev
 
 ## Carrying every student over
 
-There is no migration step. The new rules read the data that already exists and add one new field, so nothing is converted and nothing can fail halfway.
+There is no migration step. The new rules read the data that already exists and add only the new data named below, so nothing is converted and nothing can fail halfway.
 
 A level of a topic is open if any one of these is true:
 
@@ -89,7 +91,33 @@ A level of a topic is open if any one of these is true:
 
 A lesson is open if its level is open or she has any star in it.
 
-The only new data is `checkpoints[course][n] = {passed, bestPct, attempts}`, `testSeen["C:<course>:<n>"]` for its question ids, and `schema: 2`. No old field is rewritten.
+The only new data in this step is `checkpoints[course][n] = {passed, bestPct, attempts}`, `testSeen["C:<course>:<n>"]` for its question ids, and `schema: 2`. No old field is rewritten.
+
+**What Step 0 (v8) already added.** It stays as it is (rule 1), and this step keeps every item working:
+
+- **`eraseGen`**, in her state, on the web and in the app. It orders her erases; it does not count them. Start fresh adds 1. Bring back what I erased, and a launch that adopts an erase made in v7 (below), set it one above both copies. Missing, or anything but a positive number, means 0. Bring my progress never takes a file's.
+- **`nativeCopy: true`**, in her state, on every write of it in the Android app (`save()` sets it, and so does the account fold, which writes directly), never on the web. v7 carries it along on its own saves, but v7's Start fresh drops it, as it drops `eraseGen`.
+- **`hikmat_native_saved`**, a localStorage key holding `"1"` (app only). The first write of her state that localStorage keeps sets it, and nothing removes it, so it means: this WebView storage has held a marked state since its data was last wiped.
+- **`hikmat_native_unmerged`**, a localStorage key holding a state key such as `hikmat_state_guest` (app only). A launch began without a readable state under that key (after an install that restored nothing, or a wipe), and since then no launch has had localStorage keep the save it makes right after reading the native copy. Such a launch sets it, and normally removes it itself, once the native copy has been read and localStorage has kept the save after it.
+- **The launch marks**, taken by the first statements of the game's script, before anything can write: `NATIVE_APP` (`window.Capacitor` is there), `BOOT_STATE` (which `hikmat_state_*` keys held a state that parses), `BOOT_MARKED` (which of those carry `nativeCopy`), and `BOOT_NATIVE_SAVED` and `BOOT_UNMERGED` (the two keys above). They live in memory and must stay first. From them comes `localWasMissing`: her state was missing at boot, or `hikmat_native_unmerged` names it. Separate from them is the mirror gate: nothing is written to the native copy until the launch has read it, and nothing at all in a launch whose read failed twice or that found no plugin.
+- **The undo copy**, `hikmat_undo_<id>` (`hikmat_undo_guest` with accounts off), in localStorage and, in the app, in the native copy: `{kind: "bodhya-erase-undo", v: 1, erasedAt, until, state}`, plus `fold: {id, gender, mascot}` when an account fold was waiting. Start fresh writes it (one store is enough) with a live earlier copy merged in, so the 7 days run from the newest erase. A launch that adopts an erase made in v7 writes one too. It goes after a kept Bring back what I erased, or when the app reads it after `until` (at launch, on opening My progress, or at Start fresh). So on a phone where the app is not opened, it stays past the 7 days, and in the backups taken meanwhile.
+- **The native copy**, in Capacitor Preferences (`shared_prefs/CapacitorStorage.xml`, which the Auto Backup and device-transfer rules include): `hikmat_state_guest`, the JSON of her latest save, and `hikmat_undo_guest`. It is written only once the launch has read it, the latest save winning, so it can be ahead of localStorage (a save localStorage refused) or behind it (a launch that could not read it). Nothing removes `hikmat_state_guest`; Start fresh overwrites it.
+- **The progress file** from Save my progress, `bodhya-progress-<YYYY-MM-DD>.json`: `{kind: "bodhya-progress", v: 1, app, savedAt, state}`, with her whole state. In the app it is written to the app's cache folder first, one file per day, and nothing deletes it yet (step 5 will). v8 reads files of any `v` from 1, up to 2 MB, and keeps only the fields `cleanImportedState` knows.
+- **The content caches** (`hikmat_courses_cache`, `hikmat_structure_cache`, `hikmat_testbank_cache`), in IndexedDB (database `hikmat_content`, store `kv`), or still in localStorage where IndexedDB refuses them. When a cache is missing, the bundled files (lessons, test bank) and the game's own defaults (grade structure) stand in, and only a server answer writes a cache again. No progress goes there.
+
+At launch, before any `eraseGen` is compared, v8 looks for an erase made in v7: her state at boot lacked `nativeCopy` (`BOOT_MARKED`), `hikmat_native_saved` is set, the native copy carries `nativeCopy`, and `localWasMissing` is false. Then localStorage stands whatever the two `eraseGen`s, `eraseGen` goes one above both, and the native copy (if it holds progress) becomes the undo copy, with any live earlier undo copy merged in, for 7 days from that launch (`adoptOlderErase`). If neither store takes that undo copy, the usual merge runs instead. The usual merge: the copy with the higher `eraseGen` wins outright, and equal ones merge, with the native copy as the base when `localWasMissing`.
+
+**What this step has to do with them:**
+
+- **Every merge of two states goes through `mergeSavedState`, which copies only the fields it names:** the launch merge, the account fold, Bring my progress, Bring back what I erased, and the merge of two undo copies (`withEarlierUndo`, used by a second Start fresh within the 7 days and by `adoptOlderErase`). Bring also keeps only what `cleanImportedState` names. So `checkpoints` goes into both: merged like `levelTests` (passed if either copy passed, the higher `bestPct`, attempts the higher for one learner and added up for two), and cleaned with `_safeKeys` at both levels. Otherwise a pass is lost wherever a copy that holds it, or a newer value of it, meets one that doesn't: a native copy ahead of localStorage, a launch after a wiped WebView that could not read the native copy (its localStorage is then the side merged in), an undo, a second erase, an adopted v7 erase, a brought file. `testSeen["C:<course>:<n>"]` needs nothing, because both functions take any `testSeen` key.
+- **The tests must see checkpoints.** In `e2e-progress-safety.py`, `guarded()` collects only stars, gems and level tests, and `lowered()` compares only those, so no test would notice a lost pass today. Add `checkpoints` to `guarded()` and seed passes in the fixtures; then every check built on `lowered()` covers them. The rollback checks (R in `judge()`, U8, R2 a) and N8 compare totals and open lessons instead, so they need a checkpoint comparison of their own, such as the levels open per topic.
+- **`schema` needs a rule, and something that reads it.** Ordinary saves in v7 and v8 carry it; Start fresh (in either) and a merge whose base lacks it drop it. For example, `save()` writes it on every save, as it writes `nativeCopy`, and a state without it is schema 1.
+- **A checkpoint in progress** ("Leaving mid-checkpoint", above) has no place yet. If it is kept in her saved state, it is new data too, and it needs a rule in the merges, the undo copy and the file (most likely: never merged, never brought).
+- **New defaults go into `withBootDefaults()`** as well as `fresh()` and the boot section, because the launch merge puts its state in place after the boot section has run.
+- **`hasProgress()` counts a passed checkpoint**, as it counts a passed level test. Otherwise checkpoints passed without a star get no undo copy when a launch adopts an erase made by an older build, and Bring my progress takes a file's settings over hers.
+- **New code that writes a state key goes through `save()`, or sets `nativeCopy` itself.** At the next launch, an unmarked state next to a marked native copy reads as an erase made in v7.
+- **If this step is pulled back to v8,** v8 keeps `checkpoints` through its own saves but drops them in the merges above. The rollback test runs Start fresh then Bring back what I erased, and Bring my progress, on v8, and checks which levels are open when this step returns.
+- **Narrow loss paths in v8** found after it was built are listed in Step 0's plan ("Found 6 Nov"), with what became of them. Where this step touches the same code, it keeps their fixes, or fixes them.
 
 On the first launch after the update, every lesson she played is open, every level she reached is open, and every number she saw is the same or higher. If a release has to be pulled, the previous build still reads the same data, because nothing it relies on changed.
 

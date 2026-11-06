@@ -22,6 +22,10 @@ One pull request per step, each with screenshots at 360 x 640 in light, dark and
 3. Progress model: five levels inside each topic, with checkpoints of 10 questions, a 75% pass mark and no clock. If she leaves mid-checkpoint, that question is swapped when she returns. Use the four-condition open rule from docs/progress-logic.md, add only the new fields it names, and never rewrite old ones. Gems stay stored and counted but are not shown.
 4. Screens: Home (page 04), then the results and checkpoint screens (page 05), then the topic path, level sheet and Me screen (page 06).
 5. Learners: private sign-in. Never show a list of learners, their faces or how many there are. A phone with one learner opens Home directly. With two or more, every launch asks her name; a match shows only that learner's face, and a new name picks a face. Use hikmat_profiles and hikmat_profile_active, never hikmat_current. Erase works per learner, keeps a 7-day undo, and never names anyone else.
+   - Delete for good (decided 6 Nov): design it here with "Erase this learner's progress", so a learner can remove the 7-day undo copy at once, unaided. v8 ships without it, and the published pages name uninstalling the app or clearing its storage as the full, immediate delete.
+   - Save files: delete each Save my progress file from the app's cache once sharing is done, or at the next launch. v8 leaves every file there, and Start fresh does not remove them.
+   - Removing the undo copy when she asks, and those cache files, is allowed. The rule below on stored keys protects her progress, not copies of it; Step 0's plan already lets the undo copy remove itself.
+   - Left from Step 0's plan: don't deploy nightly or v8's game to the web until this step gives each account on a shared laptop its own profile. With accounts off, only the girl signed in at the time is folded into the one device profile. On the web, an undo copy also roughly doubles her localStorage for 7 days, so a nearly full browser can refuse a later save with no native copy behind it; decide here how to handle that.
 
 ## Rules for every step
 
