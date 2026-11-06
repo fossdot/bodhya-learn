@@ -219,11 +219,10 @@
   .levelrow .lvright { font-weight:800; font-size:14px; white-space:nowrap; display:flex; align-items:center; gap:4px; }
   [data-theme="dark"] .levelrow .lvbadge { background:#3a2d5c; color:#d9c8ff; }
   [data-theme="dark"] .levelrow.done .lvbadge { background:#14532d; color:#bbf7d0; }
-  /* the ☰ sits in the counters row, so it has to read as one of them: same pill shell, but a
-     button, and wide enough to stay a 44px target on a phone (see the pointer:coarse rules) */
-  .pill.menubtn { cursor:pointer; font-size:19px; line-height:1; padding:5px 14px;
-                  border-color:var(--line); color:var(--muted); }
-  .pill.menubtn:active { transform:translateY(2px); }
+  /* the ☰ is the last segment of the utility cluster, beside 🔊 / theme / language, so every
+     control sits in one group (2026-11-02); the glyph is drawn larger than the text segments */
+  .toggle.menubtn { font-size:19px; line-height:1; }
+  .toggle.menubtn:active { transform:translateY(2px); }
   .toggle {
     background: #fff; border: 2px solid var(--line); color:var(--muted); cursor:pointer;
     padding: 6px 13px; border-radius: var(--r-pill); font-weight:800; font-size: 12px;
@@ -972,11 +971,26 @@
        `width:100%` forced an always-empty first row, and `flex:1 1 auto` still measured
        133-183px of sticky bar (a fifth of the screen) because back + counters + cluster +
        Help can never share 393px at 44px targets. The markup now groups counters (.stats)
-       separately from the buttons (.utils), so the wrap is deliberate: row one is the back
-       button with the counters beside it, row two is the utility cluster — two stable rows,
-       no blank row, and fmtCount()/tabular-nums stop the bar re-wrapping as she earns. */
+       separately from the buttons (.utils), so the wrap is deliberate — two stable rows, no
+       blank row, and fmtCount()/tabular-nums stop the bar re-wrapping as she earns.
+       2026-11-02: the rows were swapped round (Vishal). Every control — back, 🔊, theme,
+       language and ☰ — now shares row one, so there is one place to look for "buttons"; the
+       counters (★, 💎, L) drop to row two. Eight 44px targets can't share a 360dp row, so this
+       keeps the targets and moves the read-only counters instead. Width-only on purpose: a
+       phone held sideways (max-height match) is wide enough for the desktop single row. */
     .stats { margin-left: auto; }
-    .utils { flex: 1 1 auto; justify-content: center; }
+  }
+  @media (max-width: 560px){
+    .topbar { row-gap: 8px; }
+    /* basis 0, not auto: with `auto` a long back label ("← Vegetables at the Bazaar") is too
+       wide to share the row, so flex-wrap pushed the buttons onto a third row instead of
+       shrinking the label. At 0 the back area takes only the space left beside the cluster
+       and #backLabel truncates with an ellipsis (rules below). */
+    .topbar .brand { order: 0; flex: 1 1 0; min-width: 0; }   /* .topbar: outranks the later `.brand { flex:1 1 auto }` */
+    .utils { order: 1; flex: 0 0 auto; }
+    .stats { order: 2; flex: 1 1 100%; justify-content: center; margin-left: 0; }
+  }
+  @media (max-width: 560px), (max-height: 560px){
     /* A long back label (Hindi runs longer than English) truncates inside the row's real
        free space instead of a fixed 46vw; the full text stays in the aria-label. */
     .brand { flex: 1 1 auto; min-width: 0; }
@@ -1098,13 +1112,13 @@
         <span class="pill star"><span class="staricon" id="starIcon">★</span> <span id="totalStars">0</span></span>
         <span class="pill coin"><span id="coinIcon">💎</span> <span id="coins">0</span></span>
         <button class="pill level" id="levelPill" title="Level / स्तर" aria-haspopup="dialog">L1</button>
-        <button class="pill menubtn" id="menuBtn" title="Menu / मेन्यू" aria-haspopup="dialog">☰</button>
       </div>
       <div class="utils">
         <div class="utilcluster">
           <button class="toggle hearbtn" id="hearBtn" title="Listen to this screen / यह स्क्रीन सुनो">🔊</button>
           <button class="toggle" id="themeToggle" title="Light / dark">🌙</button>
           <button class="toggle" id="langToggle" title="Language / भाषा">EN</button>
+          <button class="toggle menubtn" id="menuBtn" title="Menu / मेन्यू" aria-haspopup="dialog">☰</button>
         </div>
       </div>
     </div>
@@ -1784,27 +1798,26 @@ const COACH = {
   form:   { en:"Fill the form one line at a time — pick the right answer for each line.",        hi:"फ़ॉर्म एक-एक लाइन करके भरो — हर लाइन के लिए सही जवाब चुनो।" },
 };
 
-// ---------- Accounts: on for the web, off for the Play build ----------
-// Sign-in and sign-up are ANDROID-ONLY casualties (Vishal, 2026-08-27). The web app served by
-// Frappe keeps every account door exactly as it was; the packaged Play build ships without any
-// of them, because a store app that opens with a login screen asks a child for an identity
-// before it has given her a single reason to want one.
+// ---------- Accounts: off everywhere ----------
+// Sign-in and sign-up were first cut from the packaged Play build only (Vishal, 2026-08-27),
+// because a store app that opens with a login screen asks a child for an identity before it
+// has given her a single reason to want one. On 2026-10-17 the same call was made for the web
+// build: no login, no signup, on any platform.
 //
-// This constant stays TRUE here. bundle-game.js rewrites it to false for the packaged build —
-// the same fail-loud `cut()` treatment that already makes Roshni AI and YouTube embeds
-// web-only. So "no accounts in this release" is provable by grepping the
-// shipped bundle rather than by trusting a runtime check, and the web build is untouched.
+// bundle-game.js still pins this declaration to false for the packaged build with its
+// fail-loud `cut()`, so "no accounts in this release" stays provable by grepping the shipped
+// bundle whichever value this line holds.
 //
 // Nothing is deleted either way. Every screen — renderOnlineLogin, renderOnlineSignup,
 // renderCompleteProfile, renderSignup, renderLogin, renderCampusLogin, renderProfile — and
-// every backend call behind them is still in this file and still works. Drop the cut from
-// bundle-game.js and the account doors reopen on Android exactly as they were, guest wall
-// and all.
+// every backend call behind them is still in this file and still works. Set this back to true
+// (and drop the cut from bundle-game.js for Android) and the account doors reopen exactly as
+// they were, guest wall and all.
 //
 // Where it is false the app never asks who you are: no login, no signup, no two-lesson wall,
 // no name, no class to pick. ALL progress lives on the device under one anonymous profile,
 // which is the point — the app remembers, so the child does not have to.
-const AUTH_ENABLED = true;
+const AUTH_ENABLED = false;
 
 // ---------- State / progress ----------
 // Identity: progress is stored per student so shared laptops keep girls separate.
@@ -3291,7 +3304,7 @@ function openMenu(){
         </a>
       </div>
       <div class="menulegal">
-        <a href="https://bodhya.net/bodhya-learn-privacy" target="_blank" rel="noopener">${tx("Privacy Policy","गोपनीयता नीति")}</a>
+        <a href="https://bodhya.net/bodhya-learn-privacy/" target="_blank" rel="noopener">${tx("Privacy Policy","गोपनीयता नीति")}</a>
         <span aria-hidden="true"> · </span>
         <a href="https://bodhya.net/data-deletion" target="_blank" rel="noopener">${tx("Delete my data","मेरा डेटा हटाओ")}</a>
       </div>
@@ -6702,6 +6715,7 @@ function recordAttempt(a){
   syncAttempts();
 }
 async function syncAttempts(){
+  if(!AUTH_ENABLED) return;              // accounts off → nothing is ever sent (see AUTH_ENABLED)
   if(_syncing) return;                   // serialize runs so concurrent calls can't clobber the queue
   const q = _readQueue();
   if(!q.length) return;
@@ -6739,6 +6753,7 @@ function recordTest(t, clientId){
 }
 let _syncingTests = false;
 async function syncTests(){
+  if(!AUTH_ENABLED) return;
   if(_syncingTests) return;
   const q = _readTests();
   if(!q.length) return;
@@ -6890,6 +6905,7 @@ function recordEvent(ev){
 }
 let _syncingEvents = false;
 async function syncEvents(){
+  if(!AUTH_ENABLED) return;
   if(_syncingEvents) return;
   const q = _readEvents();
   if(!q.length) return;
@@ -6991,6 +7007,7 @@ function flashToast(msg){
 }
 let _syncingDoubts = false;
 async function syncDoubts(){
+  if(!AUTH_ENABLED) return;
   if(_syncingDoubts) return;
   const q = _readDoubts();
   if(!q.length) return;
@@ -7114,6 +7131,7 @@ function _readAtt(){ try { return JSON.parse(localStorage.getItem(ATT_QUEUE)) ||
 function _saveAtt(q){ try { localStorage.setItem(ATT_QUEUE, JSON.stringify(q.slice(-400))); } catch(e){} }
 let _syncingAtt = false;
 async function syncAttendance(){
+  if(!AUTH_ENABLED) return;
   if(_syncingAtt) return;
   const q = _readAtt();
   if(!q.length) return;
@@ -7138,6 +7156,7 @@ window.addEventListener("online", syncAttendance);
 // Best-effort last-gasp ship of the newest queued ping on pagehide. The entry stays
 // queued — server-side client_id dedup makes the inevitable double-send harmless.
 function attBeacon(){
+  if(!AUTH_ENABLED) return;
   try {
     if(!("sendBeacon" in navigator) || !location.protocol.startsWith("http")) return;
     const q = _readAtt();
@@ -7178,6 +7197,7 @@ function setStudent(stu){
   attResume();                          // start the incoming student's clock (no-op for guests)
 }
 async function mergeServerProgress(){
+  if(!AUTH_ENABLED) return;
   if(!currentStudent) return;
   const res = await api("get_progress", { student: currentStudent.id, token: currentStudent.token || "" });
   const p = res && res.progress;
