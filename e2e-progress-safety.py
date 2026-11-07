@@ -3020,9 +3020,10 @@ def _save_file(ph):
     return f["path"], f["data"]
 
 
-def _bring(ph, data, name="bodhya-progress-2026-11-05.json", mime="application/json", answer="yes"):
+def _bring(ph, data, name="bodhya-progress-2026-11-05.json", mime="application/json", answer="yes", wait_ms=8000):
     """Bring my progress as she does it: the button, the picker, the file, then her answer.
-    Returns (what the confirm sheet said or None, the message the progress sheet then shows)."""
+    Returns (what the confirm sheet said or None, the message the progress sheet then shows).
+    wait_ms bounds the wait for that message, for a launch whose native read is still out."""
     _open_progress(ph.page)
     with ph.page.expect_file_chooser(timeout=3000) as fc:
         ph.page.click("#progBring", timeout=3000)
@@ -3034,7 +3035,7 @@ def _bring(ph, data, name="bodhya-progress-2026-11-05.json", mime="application/j
         ph.page.click("#bringYes" if answer == "yes" else "#bringNo", timeout=3000)
         ph.page.wait_for_selector("#bringWrap", state="detached", timeout=8000)
         if answer == "yes":
-            ph.page.wait_for_function("() => !!(%s)()" % WARN_JS, timeout=8000)
+            ph.page.wait_for_function("() => !!(%s)()" % WARN_JS, timeout=wait_ms)
     return asked, ph.page.evaluate(WARN_JS)
 
 
@@ -4108,6 +4109,681 @@ for _name, _fn, _modes in (("erase_confirm_layout", erase_confirm_layout, ("web"
     test(_name, modes=_modes)(_t)
 
 
+# ---------------------------------------------------------------- the loss paths found 6 Nov ----
+# Three narrow ways v8 as built could still lose stars, found after the review (the step plan,
+# "Found 6 Nov"). Each needs a fault a test phone will not show by itself: localStorage refusing one
+# key, a native read that fails or is slow, a WebView that comes back empty. Each test below fails on
+# v8 as built, and under its own sabotage in the self-test.
+
+# localStorage refuses every write of the keys named, comma-separated, in e2e_refuse: a phone full
+# for exactly those writes. It is an init script, so it is in place before the game's first write,
+# and the flag lives in storage, so it holds in every launch until it is taken away.
+REFUSE_KEYS_JS = ("/* e2e: localStorage refuses the keys named in e2e_refuse */(function(){"
+                  "var s=Storage.prototype.setItem,g=Storage.prototype.getItem;"
+                  "Storage.prototype.setItem=function(k,v){"
+                  "if(String(g.call(this,'e2e_refuse')||'').split(',').indexOf(String(k))>=0)"
+                  "throw new DOMException('The quota has been exceeded.','QuotaExceededError');"
+                  "return s.apply(this,arguments);};})();")
+
+
+def _refusing_phone(env, sabotage=None, prelude=None):
+    ph = _file_phone(env, sabotage, prelude)
+    ph.ctx.add_init_script(REFUSE_KEYS_JS)
+    return ph
+
+
+def _refuse(ph, *keys):
+    """From now on localStorage refuses every write of `keys`, in this launch and later ones."""
+    ph.page.evaluate("(v) => localStorage.setItem('e2e_refuse', v)", ",".join(keys))
+
+
+def _closed_then(ph, local=None):
+    """Close this launch, then, from a page that runs no game code, let localStorage take every write
+    again, or (local) make it exactly that. Whatever the launch wrote on its way out met the refusal
+    it had."""
+    if ph.page is not None:
+        ph.page.close()
+        ph.page = None
+    if local is not None:
+        ph.seed_local(local)
+        return
+    pg = ph.ctx.new_page()
+    try:
+        pg.goto(ph.env.base + SEED_PATH)
+        pg.evaluate("() => localStorage.removeItem('e2e_refuse')")
+    finally:
+        pg.close()
+
+
+def _erase_gen(st):
+    return _num(_dict(st).get("eraseGen")) or 0
+
+
+def _stale_local_undo(ph, probs, when):
+    """localStorage must not hold an undo copy other than the native store's: an older one there
+    was what v8 as built read first. False when this proved nothing: the native store holds no copy,
+    or localStorage took the newer one after all, so it refused nothing."""
+    copies = _undo_copies(ph)
+    if "native" not in copies:
+        probs.append("%s the native store has no undo copy, so this proved nothing" % when)
+        return False
+    loc = copies.get("localStorage")
+    if loc == copies["native"]:
+        probs.append("%s localStorage took the newer undo copy, so it refused nothing and this proved nothing" % when)
+        return False
+    if loc is not None:
+        probs.append("%s localStorage still holds an older undo copy beside the newer one in the native store" % when)
+    return True
+
+
+def _native_alone(ph, ck, lk, wait_s=3.0):
+    """True once the native copy holds a star at ck/lk that localStorage does not."""
+    end = time.monotonic() + wait_s
+    while True:
+        if _learn_star(_parsed(ph.NATIVE.prefs.get(GUEST)), ck, lk) == 3 and not _learn_star(_parsed(_local(ph)), ck, lk):
+            return True
+        if time.monotonic() >= end:
+            return False
+        ph.page.wait_for_timeout(100)
+
+
+def _undo_copy(at, until, st):
+    return {"kind": "bodhya-erase-undo", "v": 1, "erasedAt": at, "until": until, "state": st}
+
+
+def _rel8(code, tag, probs, good):
+    """_rel, showing up to 8 problems: the tests with four cases need room for each."""
+    return [(code, not probs, "%s %s %s" % (tag, code, _clip(probs, 8) if probs else good))]
+
+
+def undo_refused_by_localstorage(env, sabotage=None, prelude=None):
+    """U12. Start fresh, a star in a new lesson, then Start fresh again inside the 7 days, with
+    localStorage refusing the second erase's undo copy and the native store keeping it. localStorage
+    must not keep the first erase's copy beside it. After a relaunch, Bring back what I erased
+    returns every star from before the first erase, and the one earned between the two. v8 as built
+    kept the first copy, read it first, and brought back only the first erase."""
+    tag = "[%s] undo_refused_by_localstorage" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append("the first erase: " + why)
+            return
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        _refuse(ph, UNDO)
+        why = start_fresh(ph.page)
+        if why:
+            probs.append("the second erase, whose undo copy only the native store took: " + why)
+            return
+        if not _stale_local_undo(ph, probs, "after the second erase,"):
+            return
+        _closed_then(ph)
+        ph.launch("new")
+        msg = _restore(ph)
+        if msg != "restored":
+            probs.append("Bring back what I erased ended with %r" % msg)
+            return
+        now = _parsed(_local(ph))
+        low = lowered(pre, now, GUEST)
+        if low:
+            probs.append("the restore lost stars from before the first erase: %s" % _clip(low, 3))
+        if _learn_star(now, ck, lk) != 3:
+            probs.append("the star earned between the two erases, at %s/%s, is gone" % (ck, lk))
+
+    return _rel("U12", tag, _full_phone_run(_refusing_phone(env, sabotage, prelude), steps),
+                "when localStorage refused the second erase's undo copy, it kept no older one beside it, and the "
+                "restore brought back every star from before the first erase and the one earned between them")
+
+
+def stale_undo_pair_heals(env, sabotage=None, prelude=None):
+    """U13. The phone U12 checks for, as v8 as built could leave it after two erases: localStorage
+    holds the first erase's undo copy, and the native store the second one's, which holds the first
+    as well.
+    (a) Bring back what I erased must take both copies together: the second erase's 6 days left,
+        every star from before the first erase, the one earned between the two, and no undo copy
+        left in either store.
+    (b) She has earned a star since, and v7's Start fresh then rebuilt her state. The launch that
+        adopts v7's erase (adoptOlderErase) must take both copies into the undo copy it makes, so
+        that Bring back what I erased returns all of that and the star from before v7's erase."""
+    tag = "[%s] stale_undo_pair_heals" % env.mode
+    fx = _mid()
+    pre = fx.seed_states[GUEST]
+    (ck, lk), (ck2, lk2) = _fresh_lessons(fx, 2)
+    probs = []
+    for case in ("(a)", "(b)"):
+        def steps(ph, pr, case=case):
+            now = int(time.time() * 1000)
+            both = json.loads(compact(pre))
+            both.setdefault("progress", {}).setdefault(ck, {}).setdefault(lk, {})["learn"] = 3
+            both["eraseGen"] = 1
+            keep = {f: pre[f] for f in ("lang", "theme", "sound", "gender", "mascot", "prefsTouched") if f in pre}
+            erased = dict(keep, progress={}, coins=0, levelTests={}, testSeen={}, eraseGen=2, nativeCopy=True)
+            local = {GUEST: compact(erased), UNDO: compact(_undo_copy(now - 2 * DAY_MS, now + 5 * DAY_MS, pre)),
+                     "hikmat_native_saved": "1"}
+            native = erased
+            if case == "(b)":
+                native = dict(erased, progress={ck2: {lk2: {"learn": 3}}})
+                local[GUEST] = compact(dict(keep, progress={}, coins=0, levelTests={}, testSeen={}))
+            ph.seed_local(local)
+            ph.NATIVE.prefs[GUEST] = compact(native)
+            ph.NATIVE.prefs[UNDO] = compact(_undo_copy(now - DAY_MS, now + 6 * DAY_MS, both))
+            ph.launch("new")
+            if case == "(b)" and ph.snap()["total"] != 0:
+                pr.append("the launch did not take v7's erase as hers, so this proved nothing")
+                return
+            row = _undo_row(ph)
+            if not row:
+                pr.append("there is no undo row")
+                return
+            if case == "(a)" and row["days"] != 6:
+                pr.append("the undo row says %s days left, not the second erase's 6" % row["days"])
+            msg = _restore(ph)
+            if msg != "restored":
+                pr.append("Bring back what I erased ended with %r" % msg)
+                return
+            got = _parsed(_local(ph))
+            low = lowered(pre, got, GUEST)
+            if low:
+                pr.append("the restore lost stars from before the first erase: %s" % _clip(low, 3))
+            if _learn_star(got, ck, lk) != 3:
+                pr.append("the star earned between the two erases, at %s/%s, is gone: only the older copy was taken"
+                          % (ck, lk))
+            if case == "(b)" and _learn_star(got, ck2, lk2) != 3:
+                pr.append("the star from before v7's erase, at %s/%s, is gone" % (ck2, lk2))
+            left = _undo_copies(ph)
+            if left:
+                pr.append("after the restore an undo copy is still in %s" % " and ".join(sorted(left)))
+
+        got = _full_phone_run(_file_phone(env, sabotage, prelude), steps)
+        probs.extend("%s %s" % (case, p) for p in got)
+    return _rel("U13", tag, probs,
+                "with the first erase's undo copy in localStorage and the second's in the native store, (a) the restore "
+                "and (b) a launch that adopted v7's erase took both, so every star came back, the one between the two "
+                "erases too")
+
+
+def undo_survives_clock_back(env, sabotage=None, prelude=None):
+    """U14. Start fresh, then a star in a new lesson. The phone's clock goes 3 days back (a dead
+    battery, or a date set by hand), and she taps Start fresh again. That erase's native undo write
+    is lost, so localStorage holds its copy, which holds everything, and the native store still
+    holds the first erase's copy, whose erasedAt is now the later one. After a relaunch, Bring back
+    what I erased must return every star from before the first erase and the one earned between
+    them: the clock cannot say which copy is newer."""
+    tag = "[%s] undo_survives_clock_back" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append("the first erase: " + why)
+            return
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        _settled(ph)
+        ph.ctx.add_init_script(CLOCK_JS % (-3, -3 * DAY_MS))
+        ph.launch("new")
+        ph.NATIVE.drop_next_write = UNDO
+        why = start_fresh(ph.page)
+        if why:
+            probs.append("the second erase, whose native undo write was lost: " + why)
+            return
+        copies = _undo_copies(ph)
+        loc, nat = copies.get("localStorage"), copies.get("native")
+        if not loc or not nat or not (_num(nat.get("erasedAt")) or 0) > (_num(loc.get("erasedAt")) or 0):
+            probs.append("the native store does not hold the first erase's copy with the later erasedAt, "
+                         "so this proved nothing")
+            return
+        ph.launch("new")
+        msg = _restore(ph)
+        if msg != "restored":
+            probs.append("Bring back what I erased ended with %r" % msg)
+            return
+        now = _parsed(_local(ph))
+        low = lowered(pre, now, GUEST)
+        if low:
+            probs.append("the restore lost stars from before the first erase: %s" % _clip(low, 3))
+        if _learn_star(now, ck, lk) != 3:
+            probs.append("the star earned between the two erases, at %s/%s, is gone: the copy with the later erasedAt "
+                         "was taken alone" % (ck, lk))
+
+    return _rel("U14", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "with the clock 3 days back at the second erase and its native undo write lost, the restore brought back "
+                "every star from before the first erase and the one earned between them")
+
+
+def erase_while_restoring(env, sabotage=None, prelude=None):
+    """U15. Start fresh, a star in a new lesson, then a relaunch where every native read takes 3 s.
+    She taps Bring back what I erased, closes My progress while it runs, opens it again and taps
+    Start fresh, then Erase. That erase must be refused: run alongside the restore, it writes its
+    undo copy and the restore then removes it, so nothing of hers is left anywhere. The restore
+    finishes, and after a relaunch every star is there."""
+    tag = "[%s] erase_while_restoring" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        _settled(ph)
+        ph.launch("new")
+        if not _undo_row(ph):
+            probs.append("there is no undo row, so this proved nothing")
+            return
+        ph.NATIVE.get_delay_ms = 3000
+        ph.page.click("#progUndo", timeout=3000)
+        ph.page.click("#dClose", timeout=3000)
+        _open_erase(ph.page)
+        ph.page.wait_for_timeout(650)
+        if UNDO not in ph.NATIVE.prefs:
+            probs.append("the restore had finished before she tapped Erase, so this proved nothing")
+            return
+        ph.page.click("#eraseYes", timeout=3000)
+        try:
+            ph.page.wait_for_selector("#eraseWrap", state="detached", timeout=15000)
+            ph.page.wait_for_function("() => ['erased', 'erasefail'].includes((%s)())" % SHEET_MSG_JS, timeout=15000)
+        except PWTimeout:
+            pass
+        said = ph.page.evaluate(SHEET_MSG_JS)
+        ph.NATIVE.get_delay_ms = 0
+        if said != "erasefail":
+            probs.append("an erase tapped while Bring back what I erased was running must be refused, and the sheet says %r"
+                         % said)
+        try:
+            ph.page.wait_for_function("() => (%s)() === 'restored'" % SHEET_MSG_JS, timeout=20000)
+        except PWTimeout:
+            pass
+        ph.page.wait_for_timeout(1000)
+        ph.launch("new")
+        now = _parsed(_local(ph))
+        if said == "erased" and not _undo_copies(ph):
+            probs.append("she was told her progress was erased and could be brought back, and no undo copy is left")
+        low = lowered(pre, now, GUEST)
+        if said != "erased" and low:
+            probs.append("after the restore and a relaunch, her stars are lower: %s" % _clip(low, 3))
+        if said != "erased" and _learn_star(now, ck, lk) != 3:
+            probs.append("the star earned after the erase, at %s/%s, is gone" % (ck, lk))
+
+    return _rel("U15", tag, _full_phone_run(_file_phone(env, sabotage, prelude), steps),
+                "an erase tapped while Bring back what I erased was running was refused, and after the restore and a "
+                "relaunch every star was there")
+
+
+def older_erase_undo_refused_locally(env, sabotage=None, prelude=None):
+    """R3. R2 (b) after an erase in v8. Start fresh in v8 and a star in a new lesson, then v7's Start
+    fresh, then v8 again, with localStorage refusing the undo copy that v8 now makes of the native
+    copy (adoptOlderErase) and the native store keeping it. localStorage must not keep v8's first
+    undo copy beside it, and Bring back what I erased returns every star from before the first erase
+    and the one earned between the two."""
+    tag = "[%s] older_erase_undo_refused_locally" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append("v8's Start fresh: " + why)
+            return
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        _settled(ph)
+        ph.launch("old")
+        _v7_start_fresh(ph.page)
+        ph.launch("old")
+        if ph.snap()["total"] != 0 or _local(ph, UNDO) is None:
+            probs.append("v7's Start fresh left stars, or took v8's undo copy from localStorage, so this proved nothing")
+            return
+        _refuse(ph, UNDO)
+        ph.launch("new")
+        if ph.snap()["total"] != 0:
+            probs.append("back on v8 the stars she erased in v7 are back without her asking, so this proved nothing")
+            return
+        if not _stale_local_undo(ph, probs, "back on v8,"):
+            return
+        _closed_then(ph)
+        ph.launch("new")
+        msg = _restore(ph)
+        if msg != "restored":
+            probs.append("Bring back what I erased ended with %r" % msg)
+            return
+        got = _parsed(_local(ph))
+        low = lowered(pre, got, GUEST)
+        if low:
+            probs.append("the restore lost stars from before v8's erase: %s" % _clip(low, 3))
+        if _learn_star(got, ck, lk) != 3:
+            probs.append("the star earned between v8's erase and v7's, at %s/%s, is gone" % (ck, lk))
+
+    return _rel("R3", tag, _full_phone_run(_refusing_phone(env, sabotage, prelude), steps),
+                "after v7's Start fresh, with localStorage refusing v8's new undo copy, no older copy stayed beside it, "
+                "and the restore brought back every star from before both erases")
+
+
+def erase_waits_for_native_read(env, sabotage=None, prelude=None):
+    """N11. Start fresh where the state on screen can lack what only the native copy holds.
+    (a) An empty WebView, a native copy holding every star of v7-midway, and two failed reads. Start
+        fresh must be refused: what is on screen is not her progress, and an erase of it would keep
+        an undo copy of nothing. (In v8 as built it also won the next launch on eraseGen; here the
+        next launch would undo it under the mark.) After a relaunch that reads the native copy,
+        every star is there.
+    (b) The same phone with a slow read, and she taps Erase while it is still out. The erase must
+        wait for it and erase her progress, not the empty screen: after a relaunch, Bring back what
+        I erased returns every star.
+    (c) Her WebView is kept, but localStorage refused the save of a star in a new lesson, so only
+        the native copy holds it, and the next launch's two reads fail. Start fresh must be refused:
+        the erase would win the next launch on eraseGen, and its undo copy would lack the star.
+        After a relaunch that reads the native copy, the star is there."""
+    tag = "[%s] erase_waits_for_native_read" % env.mode
+    fx = _mid()
+    pre = fx.seed_states[GUEST]
+    (ck, lk), = _fresh_lessons(fx, 1)
+    probs = []
+    for case in ("(a)", "(b)", "(c)"):
+        def steps(ph, pr, case=case):
+            if case == "(c)":
+                ph.seed(fx)
+                ph.launch("new")
+                _settled(ph)
+                _refuse(ph, GUEST)
+                ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+                if not _native_alone(ph, ck, lk):
+                    pr.append("the new star did not reach the native copy alone, so this proved nothing")
+                    return
+                _closed_then(ph)
+            else:
+                ph.seed_local({})
+                ph.NATIVE.prefs[GUEST] = fx.local[GUEST]
+            if case in ("(a)", "(c)"):
+                ph.NATIVE.fail_gets = 2
+                ph.launch("new")
+                if ph.NATIVE.fail_gets:
+                    pr.append("the launch did not try to read the native copy twice, so this proved nothing")
+                    return
+                why = start_fresh(ph.page, expect="erasefail")
+                if why:
+                    pr.append("the launch could not read the native copy, so Start fresh must be refused. " + why)
+                ph.launch("new")
+                if why and _restore(ph) != "restored":
+                    pr.append("Bring back what I erased did not finish")
+                got = _parsed(_local(ph))
+                low = lowered(pre, got, GUEST)
+                if low:
+                    pr.append("after a relaunch that read the native copy%s, her stars are lower: %s"
+                              % (", and Bring back what I erased" if why else "", _clip(low, 3)))
+                if case == "(c)" and _learn_star(got, ck, lk) != 3:
+                    pr.append("the star only the native copy held, at %s/%s, is gone" % (ck, lk))
+                return
+            ph.NATIVE.get_delay_ms = 6000
+            ph.launch("new", wait=False)
+            ph.page.wait_for_selector("#menuBtn", timeout=10000)
+            ph.NATIVE.get_delay_ms = 0
+            _open_erase(ph.page)
+            ph.page.wait_for_timeout(650)
+            if ph.page.evaluate("() => _mirrorOpen"):
+                pr.append("the native read was back before she tapped Erase, so this proved nothing")
+                return
+            ph.page.click("#eraseYes", timeout=3000)
+            try:
+                ph.page.wait_for_selector("#eraseWrap", state="detached", timeout=15000)
+                ph.page.wait_for_function("() => (%s)() === 'erased'" % SHEET_MSG_JS, timeout=15000)
+            except PWTimeout:
+                pr.append("an erase tapped before the native read was back ended with %r, not 'erased'"
+                          % ph.page.evaluate(SHEET_MSG_JS))
+                return
+            ph.launch("new")
+            msg = _restore(ph)
+            if msg != "restored":
+                pr.append("Bring back what I erased ended with %r" % msg)
+                return
+            low = lowered(pre, _parsed(_local(ph)), GUEST)
+            if low:
+                pr.append("an erase tapped before the native read was back kept an undo copy without her stars: %s"
+                          % _clip(low, 3))
+
+        got = _full_phone_run(_file_phone(env, sabotage, prelude) if case != "(c)" else
+                              _refusing_phone(env, sabotage, prelude), steps)
+        probs.extend("%s %s" % (case, p) for p in got)
+    return _rel8("N11", tag, probs,
+                 "Start fresh was refused while the native copy could not be read, after an empty WebView and after a save "
+                 "localStorage refused, and an erase tapped before a slow read was back waited for it: every star stayed")
+
+
+def restore_waits_for_native_read(env, sabotage=None, prelude=None):
+    """N12. Start fresh, then a star in a new lesson that localStorage refused and the native copy
+    took, so the native copy is ahead of localStorage. The next launch's two reads fail, and Bring
+    back what I erased must be refused there: made from localStorage alone, the restore would win
+    the next launch on eraseGen, without the new star. After a relaunch that reads the native copy,
+    the new star is there, and Bring back what I erased returns every star."""
+    tag = "[%s] restore_waits_for_native_read" % env.mode
+    fx = _mid()
+    (ck, lk), = _fresh_lessons(fx, 1)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        pre = _parsed(_local(ph))
+        why = start_fresh(ph.page)
+        if why:
+            probs.append(why)
+            return
+        _settled(ph)
+        _refuse(ph, GUEST)
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        end = time.monotonic() + 3
+        while _learn_star(_parsed(ph.NATIVE.prefs.get(GUEST)), ck, lk) != 3 and time.monotonic() < end:
+            ph.page.wait_for_timeout(100)
+        if _learn_star(_parsed(ph.NATIVE.prefs.get(GUEST)), ck, lk) != 3 or _learn_star(_parsed(_local(ph)), ck, lk):
+            probs.append("the new star did not reach the native copy alone, so this proved nothing")
+            return
+        _closed_then(ph)
+        ph.NATIVE.fail_gets = 2
+        ph.launch("new")
+        if ph.NATIVE.fail_gets:
+            probs.append("the launch did not try to read the native copy twice, so this proved nothing")
+            return
+        msg = _restore(ph)
+        if msg != "undofail":
+            probs.append("the launch could not read the native copy, so Bring back what I erased must be refused, "
+                         "and it ended with %r" % msg)
+        ph.launch("new")
+        if _learn_star(_parsed(_local(ph)), ck, lk) != 3:
+            probs.append("after a relaunch that read the native copy, the star only it held, at %s/%s, is gone" % (ck, lk))
+        msg = _restore(ph)
+        if msg != "restored":
+            probs.append("after a relaunch that read the native copy, Bring back what I erased ended with %r" % msg)
+            return
+        got = _parsed(_local(ph))
+        low = lowered(pre, got, GUEST)
+        if low:
+            probs.append("the restore lost stars she had erased: %s" % _clip(low, 3))
+        if _learn_star(got, ck, lk) != 3:
+            probs.append("after the restore, the star only the native copy held, at %s/%s, is gone" % (ck, lk))
+
+    return _rel("N12", tag, _full_phone_run(_refusing_phone(env, sabotage, prelude), steps),
+                "with the native copy ahead and unread, Bring back what I erased was refused, and after a relaunch "
+                "that read it the new star was there and the restore brought back every star")
+
+
+def erase_refused_while_unmerged(env, sabotage=None, prelude=None):
+    """N13. An empty WebView, a native copy holding every star of v7-midway, and a launch that reads
+    it but whose save of the merge localStorage refuses, so hikmat_native_unmerged stays. Start fresh
+    must be refused until a launch keeps the merge: under the mark the next launch takes the native
+    copy as the base and merges localStorage into it, so an erase made before then might not stand.
+    It would not where localStorage holds play the native copy lacks. Here it holds none, so this
+    checks the refusal itself. After a relaunch with room, every star is there."""
+    tag = "[%s] erase_refused_while_unmerged" % env.mode
+    fx = _mid()
+    pre = fx.seed_states[GUEST]
+
+    def steps(ph, probs):
+        ph.seed_local({"e2e_refuse": GUEST})
+        ph.NATIVE.prefs[GUEST] = fx.local[GUEST]
+        ph.launch("new")
+        if not ph.page.evaluate("() => _mirrorOpen") or _local(ph, "hikmat_native_unmerged") != GUEST:
+            probs.append("the launch did not read the native copy with its merge refused and the mark kept, "
+                         "so this proved nothing")
+            return
+        why = start_fresh(ph.page, expect="erasefail")
+        if why:
+            probs.append("localStorage had not kept the merge of the native copy, so Start fresh must be refused until a "
+                         "launch keeps it: under the mark the next launch takes the native copy as the base and merges "
+                         "localStorage into it, so an erase made before then may not stand. " + why)
+            return
+        _closed_then(ph)
+        ph.launch("new")
+        got = _parsed(_local(ph))
+        low = lowered(pre, got, GUEST)
+        if low:
+            probs.append("after a relaunch with room her stars are lower: %s" % _clip(low, 3))
+
+    return _rel("N13", tag, _full_phone_run(_refusing_phone(env, sabotage, prelude), steps),
+                "while localStorage had not kept the merge of the native copy, Start fresh was refused, and after a "
+                "relaunch with room every star was there")
+
+
+def unread_play_survives_erasegen(env, sabotage=None, prelude=None):
+    """N14. She has erased once in v8, so her native copy carries eraseGen 1, and has earned a star in
+    a new lesson since. Her WebView comes back empty. In the next launch she (a) earns a star in
+    another new lesson, or (b) brings in a progress file holding one, where that launch cannot read
+    the native copy (two failed reads); or she (c) earns it, or (d) brings it in, before that
+    launch's slow read is back. Both stars must be there after a relaunch that reads the native
+    copy: the native copy is the base, and what she did before it was read is merged into it. v8 as
+    built let the native copy's higher eraseGen win outright."""
+    tag = "[%s] unread_play_survives_erasegen" % env.mode
+    fx = _mid()
+    (ck1, lk1), (ck2, lk2) = _fresh_lessons(fx, 2)
+    probs = []
+    for case in ("(a)", "(b)", "(c)", "(d)"):
+        def steps(ph, pr, case=case):
+            ph.seed(fx)
+            ph.launch("new")
+            why = start_fresh(ph.page)
+            if why:
+                pr.append(why)
+                return
+            ph.page.evaluate(STAR_SAVE_JS, [ck1, lk1])
+            _, nat = _settled(ph)
+            if _erase_gen(_parsed(nat)) < 1 or _learn_star(_parsed(nat), ck1, lk1) != 3:
+                pr.append("the native copy does not hold the erase and the star after it, so this proved nothing")
+                return
+            _closed_then(ph, local={})
+            slow = case in ("(c)", "(d)")
+            if slow:
+                ph.NATIVE.get_delay_ms = 6000
+                ph.launch("new", wait=False)
+                ph.page.wait_for_selector("#menuBtn", timeout=10000)
+                ph.NATIVE.get_delay_ms = 0
+            else:
+                ph.NATIVE.fail_gets = 2
+                ph.launch("new")
+                if ph.NATIVE.fail_gets:
+                    pr.append("the launch did not try to read the native copy twice, so this proved nothing")
+                    return
+            if slow and ph.page.evaluate("() => _mirrorOpen"):
+                pr.append("the native read was back before she played, so this proved nothing")
+                return
+            if case in ("(a)", "(c)"):
+                ph.page.evaluate(STAR_SAVE_JS, [ck2, lk2])
+            else:
+                _asked, shown = _bring(ph, json.dumps(_envelope({"progress": {ck2: {lk2: {"learn": 3}}}})))
+                if (shown or {}).get("msg") != "brought":
+                    pr.append("the file was not brought in (%r)" % (shown,))
+                    return
+            if slow:
+                ph.page.wait_for_function("() => _mirrorOpen", timeout=15000)
+            ph.launch("new")
+            got = _parsed(_local(ph))
+            if _learn_star(got, ck1, lk1) != 3:
+                pr.append("the star the native copy held, at %s/%s, is gone" % (ck1, lk1))
+            if _learn_star(got, ck2, lk2) != 3:
+                pr.append("the star %s %s, at %s/%s, is gone"
+                          % ("earned" if case in ("(a)", "(c)") else "brought in",
+                             "before the slow read was back" if slow else "where the native copy could not be read",
+                             ck2, lk2))
+            _agree(ph, pr, "after the launch that read it,")
+
+        got = _full_phone_run(_file_phone(env, sabotage, prelude), steps)
+        probs.extend("%s %s" % (case, p) for p in got)
+    return _rel8("N14", tag, probs,
+                 "after an erase and an empty WebView, a star earned or brought in where the native copy could not be "
+                 "read, or before a slow read was back, was kept beside the native copy's, though its eraseGen was higher")
+
+
+def bring_waits_for_native_read(env, sabotage=None, prelude=None):
+    """N15. A star in a new lesson that localStorage refused and the native copy took, and
+    localStorage still refusing her state. In the next launch the native read is slow, and she brings
+    in a progress file before it is back. The file must be merged into her state as read from both
+    copies: merged into the state from before the read, and then mirrored, it would be written over
+    what only the native copy holds. After a relaunch with room, the native copy's star and the
+    file's are both there."""
+    tag = "[%s] bring_waits_for_native_read" % env.mode
+    fx = _mid()
+    (ck, lk), (ck2, lk2) = _fresh_lessons(fx, 2)
+
+    def steps(ph, probs):
+        ph.seed(fx)
+        ph.launch("new")
+        _settled(ph)
+        _refuse(ph, GUEST)
+        ph.page.evaluate(STAR_SAVE_JS, [ck, lk])
+        if not _native_alone(ph, ck, lk):
+            probs.append("the new star did not reach the native copy alone, so this proved nothing")
+            return
+        ph.NATIVE.get_delay_ms = 9000
+        ph.launch("new", wait=False)
+        ph.page.wait_for_selector("#menuBtn", timeout=10000)
+        ph.NATIVE.get_delay_ms = 0
+        if ph.page.evaluate("() => _mirrorOpen"):
+            probs.append("the native read was back before she brought the file in, so this proved nothing")
+            return
+        _asked, shown = _bring(ph, json.dumps(_envelope({"progress": {ck2: {lk2: {"learn": 3}}}})), wait_ms=15000)
+        brought = (shown or {}).get("msg") == "brought"
+        ph.page.wait_for_function("() => _mirrorOpen", timeout=15000)
+        ph.page.wait_for_timeout(1500)
+        _closed_then(ph)
+        ph.launch("new")
+        got = _parsed(_local(ph))
+        if _learn_star(got, ck, lk) != 3:
+            probs.append("after a relaunch with room, the star only the native copy held, at %s/%s, is gone%s"
+                         % (ck, lk, "" if brought else " (the file was not brought in: %r)" % (shown,)))
+        if brought and _learn_star(got, ck2, lk2) != 3:
+            probs.append("she was told the file was brought in, and its star, at %s/%s, is gone" % (ck2, lk2))
+
+    return _rel("N15", tag, _full_phone_run(_refusing_phone(env, sabotage, prelude), steps),
+                "a file brought in before a slow native read was back waited for it, and after a relaunch with room the "
+                "native copy's star and the file's were both there")
+
+
+for _name, _fn, _modes in (("undo_refused_by_localstorage", undo_refused_by_localstorage, ("native",)),
+                           ("stale_undo_pair_heals", stale_undo_pair_heals, ("native",)),
+                           ("older_erase_undo_refused_locally", older_erase_undo_refused_locally, ("native",)),
+                           ("erase_waits_for_native_read", erase_waits_for_native_read, ("native",)),
+                           ("restore_waits_for_native_read", restore_waits_for_native_read, ("native",)),
+                           ("erase_refused_while_unmerged", erase_refused_while_unmerged, ("native",)),
+                           ("unread_play_survives_erasegen", unread_play_survives_erasegen, ("native",)),
+                           ("undo_survives_clock_back", undo_survives_clock_back, ("native",)),
+                           ("erase_while_restoring", erase_while_restoring, ("native",)),
+                           ("bring_waits_for_native_read", bring_waits_for_native_read, ("native",))):
+    def _t(env, report, _fn=_fn):
+        for _code, ok, msg in _fn(env):
+            report.check(ok, msg)
+    test(_name, modes=_modes)(_t)
+
+
 @test("level_test_promotes")
 def t_level_test_promotes(env, report):
     for _code, ok, msg in level_test_promotes(env):
@@ -4349,6 +5025,30 @@ OLDER_ERASE_IGNORED = _sab("the launch merge is blind to an erase made by v7",
 INHERITED_KEYS = _sab("a file's keys may name inherited members",
                       "_safeKeys=function(o){return _isObj(o)?Object.keys(o).filter(function(k){"
                       "return k.length>0&&k.length<=140&&!UNSAFE_KEYS.has(k);}):[];};")
+# The loss paths of 6 Nov. localStorage keeps an older undo copy beside a newer one it refused, as
+# v8 as built did.
+FORGET_NOTHING = _sab("localStorage keeps an older undo copy beside a newer one it refused",
+                      "forgetLocalUndo=function(){};")
+# The undo copy in localStorage is read first, and alone, as v8 as built read it.
+LOCAL_UNDO_FIRST = _sab("localStorage's undo copy is read first, and alone",
+                        "mergeUndo=function(a,b){return _validUndo(a)?a:(_validUndo(b)?b:null);};")
+# The undo copy with the later erasedAt is taken alone, as the first version of these fixes did.
+UNDO_BY_CLOCK = _sab("the undo copy with the later erasedAt is taken alone",
+                     "mergeUndo=function(a,b){if(!_validUndo(a))return _validUndo(b)?b:null;if(!_validUndo(b))return a;"
+                     "return (b.erasedAt||0)>(a.erasedAt||0)?b:a;};")
+# Start fresh, Bring back what I erased and a brought file go ahead before the launch has read the
+# native copy.
+NO_NATIVE_WAIT = _sab("an erase, a restore or a brought file does not wait for the native read",
+                      "nativeRead=function(){return Promise.resolve();};"
+                      "nativeSettled=function(){return Promise.resolve(true);};")
+# An erase and a restore may run at once.
+ONE_CHANGE_GONE = _sab("an erase and a restore may run at once", "oneChangeAtATime=function(run){return run();};")
+# They wait for the read, but go ahead while localStorage has not kept its merge.
+MARK_IGNORED = _sab("an erase or a restore goes ahead while the mark stays",
+                    "nativeSettled=function(){var o=function(){return _mirrorOpen;};return nativeRestore.then(o,o);};")
+# Under the mark, the launch merge decides on eraseGen first, as v8 as built did.
+ERASEGEN_UNDER_MARK = _sab("the launch merge decides on eraseGen under the mark",
+                           "var m=mergeCopy;mergeCopy=function(l,o,w){return m(l,o,w,false);};")
 
 
 def _private_output_problems():
@@ -4534,6 +5234,33 @@ def t_self_test(env, report):
            ["R2"], [("R2", "v7")])
     judged("a file whose keys name inherited members", bring_ignores_inherited_names(env, sabotage=INHERITED_KEYS),
            ["F8"], [("F8", "toString")])
+    judged("an undo copy refused by localStorage that leaves the older one there",
+           undo_refused_by_localstorage(nenv, sabotage=FORGET_NOTHING), ["U12"], [("U12", "older undo copy")])
+    judged("the same where the launch adopts an erase made by v7",
+           older_erase_undo_refused_locally(nenv, sabotage=FORGET_NOTHING), ["R3"], [("R3", "older undo copy")])
+    judged("an undo copy read from localStorage first, and alone, as v8 as built read it",
+           stale_undo_pair_heals(nenv, sabotage=LOCAL_UNDO_FIRST), ["U13"],
+           [("U13", "(a) the star earned between"), ("U13", "(b) the star earned between")])
+    judged("the undo copy with the later erasedAt taken alone",
+           undo_survives_clock_back(nenv, sabotage=UNDO_BY_CLOCK), ["U14"], [("U14", "taken alone")])
+    judged("an erase that may run alongside a restore",
+           erase_while_restoring(nenv, sabotage=ONE_CHANGE_GONE), ["U15"], [("U15", "must be refused")])
+    judged("Start fresh that does not wait for the native read",
+           erase_waits_for_native_read(nenv, sabotage=NO_NATIVE_WAIT), ["N11"],
+           [("N11", "(a) the launch could not read"), ("N11", "(b) an erase tapped before"),
+            ("N11", "(c) the launch could not read")])
+    judged("Bring back what I erased that does not wait for the native read",
+           restore_waits_for_native_read(nenv, sabotage=NO_NATIVE_WAIT), ["N12"], [("N12", "must be refused")])
+    judged("Start fresh that goes ahead while the merge is not kept",
+           erase_refused_while_unmerged(nenv, sabotage=MARK_IGNORED), ["N13"], [("N13", "until a launch keeps it")])
+    judged("a launch merge that decides on eraseGen after an empty WebView",
+           unread_play_survives_erasegen(nenv, sabotage=ERASEGEN_UNDER_MARK), ["N14"],
+           [("N14", "(a) the star earned"), ("N14", "(b) the star brought in"), ("N14", "(c) the star earned")])
+    judged("the same, and a brought file that does not wait for the native read",
+           unread_play_survives_erasegen(nenv, sabotage=ERASEGEN_UNDER_MARK + NO_NATIVE_WAIT), ["N14"],
+           [("N14", "(d) the star brought in")])
+    judged("a brought file that does not wait for the native read",
+           bring_waits_for_native_read(nenv, sabotage=NO_NATIVE_WAIT), ["N15"], [("N15", "only the native copy held")])
 
 
 # ---------------------------------------------------------------- --make-fixtures -------------
