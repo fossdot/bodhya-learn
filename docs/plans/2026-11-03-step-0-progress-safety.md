@@ -94,7 +94,7 @@ Tests that replay real saves through the update must prove that no star total dr
 - The lead has already created tag `play-v7` (97265c2) and checked it against the v7 AAB.
 
 **Interfaces (produces):**
-- **Run:** `/tmp/pw/bin/python e2e-progress-safety.py [--old play-v7] [--mode web|native|both] [--only <name>] [--self-test] [--make-fixtures]`. It prints `PASS`/`FAIL` lines in the style of `e2e-levels.py`, and exits 0 only when all pass. Target: under 5 min for `--mode both`.
+- **Run:** `~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py [--old play-v7] [--mode web|native|both] [--only <name>] [--self-test] [--make-fixtures]`. It prints `PASS`/`FAIL` lines in the style of `e2e-levels.py`, and exits 0 only when all pass. Target: under 5 min for `--mode both`.
 - **Fixture formats:**
   - **Export envelope** `{"kind":"bodhya-progress","v":1,"app":"net.bodhya.learn","savedAt":ISO,"state":{…}}`. It seeds `hikmat_state_guest`.
   - **Storage snapshot** `{"kind":"storage-snapshot","note":"…","localStorage":{key: rawString}, "withCaches"?:true, "fillToQuota"?:true}`. `withCaches` adds the three cache keys built from `hikmat/public/curriculum.json` and `testbank.json`, at real size. `fillToQuota` adds `zz_filler_*` keys until `setItem` throws.
@@ -571,7 +571,7 @@ The fake bridge gained `fail_gets` (reads that fail) and `slow_next_write` (one 
 ## For the next build
 
 Not in v8, found while building and checking it. "Open with Bodhya" (Q5) and the items under "Not in this step" are listed where they were decided.
-- **The harness's Python lives in `/tmp/pw`, and macOS cleans `/tmp`.** On 8 Nov the cleaner had removed the venv's `pyvenv.cfg` and its scripts, so `build.sh` stopped with "no Playwright". It was recreated with the same versions (Playwright 1.64.1). Move it out of `/tmp`, and point `E2E_PYTHON` and the harness's header at the new place.
+- **Done 8 Nov: the harness's Python is out of `/tmp`.** macOS cleans `/tmp`, and twice it had broken the venv at `/tmp/pw` (on 8 Nov by removing its `pyvenv.cfg` and scripts), so `build.sh` stopped with "no Playwright". The venv is now `~/.venvs/bodhya-e2e` (Python 3.14, Playwright 1.64.1, the versions the gate passed with). It is the default in `build.sh`, the harness headers and `tests/saves/README.md`, and `build.sh`'s STOP message gives the command to set it up.
 - **The emulator check has no script in the repo.** Playwright cannot attach to an Android WebView (`connect_over_cdp` fails on `Browser.setDownloadBehavior`), so it ran through a raw CDP client in node. `bundletool install-apks` also needs `--adb`, because `build.sh`'s `ANDROID_HOME` has no platform-tools. Keep the client and these steps beside `build.sh`, so every release runs the same check.
 - **Gems after an erase.** Merges, the undo copy included, keep the higher of each count. So gems earned from zero after an erase do not add to the count brought back: 1,240 before the erase and 30 after it come back as 1,240. That is as designed (D7, "the higher of each"); look again only if a tester notices.
 - **From the review of 7 Nov:**

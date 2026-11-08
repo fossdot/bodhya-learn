@@ -27,8 +27,8 @@ It fails if any of these happen:
 The checks are I1–I5 and R in `docs/plans/2026-11-03-step-0-progress-safety.md`, Task 1, with the
 field, seen-list and settings parts added after review. The harness's docstring lists them exactly.
 
-    /tmp/pw/bin/python e2e-progress-safety.py                 # everything, web and native
-    /tmp/pw/bin/python e2e-progress-safety.py --only v7-midway
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py                 # everything, web and native
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py --only v7-midway
 
 ## Formats
 
@@ -75,7 +75,7 @@ These files are generated, so don't edit them by hand, and don't add any other f
 folder: the harness refuses to run one, and `.gitignore` ignores it. To rebuild them from the old
 build:
 
-    /tmp/pw/bin/python e2e-progress-safety.py --make-fixtures
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py --make-fixtures
 
 Every game id, lesson level and question id comes from that build's own `levelsFor()`,
 `lessonLevel()` and test bank, so each one is real. Regenerating gives the same files.
@@ -126,7 +126,7 @@ go in `tests/saves/private/`, never in this folder. That folder is gitignored.
 5. Run the harness in a plain terminal. Each file runs as `update:private/<name>`, and the summary
    line says how many tester saves ran:
 
-       /tmp/pw/bin/python e2e-progress-safety.py --only private/
+       ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py --only private/
 
    An AI coding session leaves these files out by itself. The harness sees `CLAUDECODE` or
    `AI_AGENT` in its environment, says how many files it left out, and runs none of them. Pass

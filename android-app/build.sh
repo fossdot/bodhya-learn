@@ -1,7 +1,7 @@
 #!/bin/bash
 # Rebuild a signed release .aab from the current ../index.html (run ../sync-game.sh first).
 # Usage:  ./build.sh        (bump versionCode in android/app/build.gradle first for a new release)
-#         E2E_PYTHON=/path/to/python ./build.sh   (a Python with Playwright; default /tmp/pw/bin/python)
+#         E2E_PYTHON=/path/to/python ./build.sh   (a Python with Playwright; default ~/.venvs/bodhya-e2e/bin/python)
 set -uo pipefail
 cd "$(dirname "$0")"
 
@@ -43,10 +43,14 @@ fi
 if [ "${SKIP_E2E:-}" = 1 ]; then
   echo "== SKIP_E2E=1: progress-safety harness NOT run (only for a tree that just passed it) =="
 else
-  E2E_PYTHON="${E2E_PYTHON:-/tmp/pw/bin/python}"
+  # The harness's Python lives in the home folder. It used to be /tmp/pw, but macOS cleans /tmp of
+  # files nobody has opened for a few days, and twice that broke the venv and stopped the gate here.
+  E2E_PYTHON="${E2E_PYTHON:-$HOME/.venvs/bodhya-e2e/bin/python}"
   if ! "$E2E_PYTHON" -c 'import playwright' 2>/dev/null; then
-    echo "STOP: $E2E_PYTHON has no Playwright. See the top of ../e2e-progress-safety.py to set it up,"
-    echo "      or set E2E_PYTHON."
+    echo "STOP: $E2E_PYTHON has no Playwright. Set it up once, outside /tmp:"
+    echo "      python3 -m venv ~/.venvs/bodhya-e2e && ~/.venvs/bodhya-e2e/bin/pip install playwright==1.64.1"
+    echo "      ~/.venvs/bodhya-e2e/bin/playwright install chromium"
+    echo "      or set E2E_PYTHON to another Python that has Playwright."
     exit 1
   fi
   echo "== Progress safety: e2e-progress-safety.py --mode both (about 10 minutes) =="

@@ -1,10 +1,10 @@
 """Saves go through every update under test: v7 to the new build and back.
 
-    python3 -m venv /tmp/pw && /tmp/pw/bin/pip install playwright && /tmp/pw/bin/playwright install chromium
-    /tmp/pw/bin/python e2e-progress-safety.py                       # everything, web and native
-    /tmp/pw/bin/python e2e-progress-safety.py --mode web --only v7-midway
-    /tmp/pw/bin/python e2e-progress-safety.py --self-test           # prove the checks still bite
-    /tmp/pw/bin/python e2e-progress-safety.py --make-fixtures       # rebuild tests/saves/*.json from play-v7
+    python3 -m venv ~/.venvs/bodhya-e2e && ~/.venvs/bodhya-e2e/bin/pip install playwright==1.64.1 && ~/.venvs/bodhya-e2e/bin/playwright install chromium
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py                       # everything, web and native
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py --mode web --only v7-midway
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py --self-test           # prove the checks still bite
+    ~/.venvs/bodhya-e2e/bin/python e2e-progress-safety.py --make-fixtures       # rebuild tests/saves/*.json from play-v7
 
 Why this exists. A girl's stars, gems and level passes live in one localStorage key on her own
 phone and nowhere else. A Play update replaces the code that reads that key, and it gets no second
