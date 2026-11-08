@@ -1,7 +1,7 @@
 """Proves the service worker refuses a stale shell served on the UNVERSIONED game URL.
 
     bench serve --port 8002
-    /tmp/pw/bin/python e2e-stale-cache.py
+    ~/.venvs/bodhya-e2e/bin/python e2e-stale-cache.py
 
 Why this exists. /assets/ is served `cache-control: immutable, max-age=31536000`, and Frappe
 Cloud's proxy keeps a SEPARATE entry per Accept-Encoding variant. After the L1-L5 release the

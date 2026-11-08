@@ -1,8 +1,8 @@
 """End-to-end walkthrough of the L1-L5 level ladder, against a running site.
 
-    python3 -m venv /tmp/pw && /tmp/pw/bin/pip install playwright && /tmp/pw/bin/playwright install chromium
+    python3 -m venv ~/.venvs/bodhya-e2e && ~/.venvs/bodhya-e2e/bin/pip install playwright==1.64.1 && ~/.venvs/bodhya-e2e/bin/playwright install chromium
     bench serve --port 8002
-    /tmp/pw/bin/python e2e-levels.py
+    ~/.venvs/bodhya-e2e/bin/python e2e-levels.py
 
 Signs a learner up, earns her the star quota, sits the whole 20-question paper (letting one
 question time out), and checks the promotion and the single submit_test POST that follows.
@@ -10,6 +10,12 @@ question time out), and checks the promotion and the single submit_test POST tha
 It also pins the rule that replaced the old ladder wall: NOTHING LOCKS. The test still comes due,
 still appears on the trail, still promotes her — but no lesson anywhere is ever shut behind it.
 Lives in the repo because two copies of it have now been eaten by /tmp cleanup.
+
+Only for a build with accounts on: the web build on main and nightly, until step 5 of the redesign
+brief. A build with AUTH_ENABLED false (v8 onwards) cannot sign anyone up, so this says SKIP and
+exits 0 there. For a learner with no account, e2e-progress-safety.py's level_test_promotes checks
+the two rules that still hold: passing the test promotes her, and nothing locks. Step 3 replaces
+the whole ladder with checkpoints, and this file with it.
 """
 import json, re, sys
 from urllib.parse import parse_qs
@@ -33,6 +39,11 @@ with sync_playwright() as p:
     page.goto(GAME)
     page.wait_for_function("typeof COURSES !== 'undefined' && COURSES.length > 5", timeout=15000)
     page.wait_for_timeout(2500)
+    if not page.evaluate("typeof AUTH_ENABLED === 'undefined' || AUTH_ENABLED"):
+        print("SKIP this build has accounts off (AUTH_ENABLED false), so nobody can sign up; "
+              "e2e-progress-safety.py --only level_test_promotes covers a learner with no account")
+        b.close()
+        sys.exit(0)
 
     # ---------- 1. SIGN-UP: class chips include 11-12 / Bachelor's / Master's ----------
     page.evaluate("renderSignup()")

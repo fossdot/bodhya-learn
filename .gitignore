@@ -30,3 +30,33 @@ KEYSTORE-CREDENTIALS*.txt
 *.apk
 .env
 .env.*
+
+# ---- Real tester saves --------------------------------------------------------
+# e2e-progress-safety.py replays real progress files from tester phones, shared with a parent's
+# OK for that one purpose. They are children's data and this repo is PUBLIC, so they stay on the
+# machine that runs the harness. See tests/saves/README.md.
+tests/saves/private/
+# A real save put one folder up by mistake must not be one `git add tests/saves/` away from a
+# public repo either, so only the generated fixtures are tracked there (e2e-progress-safety.py's
+# FIXTURES; it also refuses to run any other file in that folder).
+tests/saves/*.[jJ][sS][oO][nN]
+!tests/saves/full-storage.json
+!tests/saves/heavy.json
+!tests/saves/post-erase.json
+!tests/saves/pre-ledger.json
+!tests/saves/retired-account.json
+!tests/saves/two-accounts.json
+!tests/saves/v7-midway.json
+# Save my progress names its file bodhya-progress-YYYY-MM-DD.json. Wherever one lands in this tree,
+# it is a child's progress.
+bodhya-progress-*
+
+# ---- android-app/ (Capacitor) -------------------------------------------------
+# Signing material lives outside git; see android-app/README.md. These are a backstop, alongside
+# the patterns above. keystore.prop* covers keystore.properties and every variant of it, including
+# keystore.properties.old-fossunited.
+*keystore.prop*
+local.properties
+google-services.json
+.gradle/
+android-app/android/app/build/
